@@ -1,0 +1,14 @@
+{
+    "editor.inlineSuggest.enabled": true,
+    "workbench.startupEditor": "none",
+    "workbench.editor.enablePreview": false,
+    "notebook.lineNumbers": "on",
+    "workbench.colorCustomizations": {},
+    "explorer.confirmDragAndDrop": false,
+    "editor.defaultFormatter": null,
+    "[python]": {
+        "editor.formatOnSave": true,
+    },
+    "python.formatting.provider": "black",
+    "python.formatting.blackPath": "/cis/home/rmuthuk1/anaconda3/envs/advrob/bin/black",
+}
