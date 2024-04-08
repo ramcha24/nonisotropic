@@ -6,21 +6,16 @@ from cli import arg_utils
 import platforms.registry
 
 
-def foo(a1, a2):
-    print("hello")
-    return
-
-
 def main():
     # Welcome message
     welcome = (
-        "-" * 82
+        "-" * 100
         + "\n Non-isotropic Robustness : Measuring adversarial robustness against non-isotropic threat specifications\n"
-        + "-" * 82
+        + "-" * 100
     )
 
     # choose an initial command
-    helptext = welcome + "\nChoose a command to run:"
+    helptext = welcome + "\n Choose a command to run:"
     for name, runner in runner_registry.registered_runners.items():
         helptext += "\n * {} {} [...] => {}".format(
             sys.argv[0], name, runner.description()
@@ -34,7 +29,7 @@ def main():
 
     # Add the arguments for that command.
     usage = "\n" + welcome + "\n"
-    usage += "patchLip.py {} [...] => {}".format(
+    usage += "nonisotropic.py {} [...] => {}".format(
         runner_name, runner_registry.get(runner_name).description()
     )
     usage += "\n" + "-" * 82 + "\n"

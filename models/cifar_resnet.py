@@ -13,9 +13,9 @@ class Model(base.Model):
     class Block(nn.Module):
         """A ResNet block."""
 
-        def __init__(self, f_in: int, f_out: int, downsample=False):
+        def __init__(self, model_name, f_in: int, f_out: int, downsample=False):
             super(Model.Block, self).__init__()
-
+            self.model_name = model_name
             stride = 2 if downsample else 1
             self.conv1 = nn.Conv2d(f_in, f_out, kernel_size=3, stride=stride, padding=1, bias=False)
             self.bn1 = nn.BatchNorm2d(f_out)
@@ -37,8 +37,9 @@ class Model(base.Model):
             out += self.shortcut(x)
             return F.relu(out)
 
-    def __init__(self, plan, initializer, outputs=None):
+    def __init__(self, model_name, plan, initializer, outputs=None):
         super(Model, self).__init__()
+        self.model_name = model_name
         outputs = outputs or 10
 
         # Initial convolution.
@@ -114,14 +115,14 @@ class Model(base.Model):
         D = (D - 2) // 6
         plan = [(W, D), (2*W, D), (4*W, D)]
 
-        return Model(plan, initializer, outputs)
+        return Model(model_name, plan, initializer, outputs)
 
     @property
     def loss_criterion(self):
         return self.criterion
 
     @staticmethod
-    def default_hparams():
+    def default_hparams(runner_name):
         model_hparams = hparams.ModelHparams(
             model_name='cifar_resnet_20',
             model_init='kaiming_normal',
@@ -143,9 +144,13 @@ class Model(base.Model):
             training_steps='160ep',
         )
 
+        testing_hparams = hparams.TestingHparams(
+        )
+
         if runner_name == 'train':
             return TrainingDesc(model_hparams, dataset_hparams, training_hparams)
         elif runner_name == 'test':
             return TestingDesc(model_hparams, dataset_hparams, training_hparams, testing_hparams)
         else:
             raise ValueError("Cannot supply default hparams for an invalid runner - {}".format(runner_name))
+

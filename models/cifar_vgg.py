@@ -13,8 +13,9 @@ class Model(base.Model):
     class ConvModule(nn.Module):
         """A single convolutional module in a VGG network."""
 
-        def __init__(self, in_filters, out_filters):
+        def __init__(self, model_name, in_filters, out_filters):
             super(Model.ConvModule, self).__init__()
+            self.model_name = model_name
             self.conv = nn.Conv2d(in_filters, out_filters, kernel_size=3, padding=1)
             self.bn = nn.BatchNorm2d(out_filters)
 
@@ -77,14 +78,14 @@ class Model(base.Model):
         else:
             raise ValueError('Unknown VGG model: {}'.format(model_name))
 
-        return Model(plan, initializer, outputs)
+        return Model(model_name, plan, initializer, outputs)
 
     @property
     def loss_criterion(self):
         return self.criterion
 
     @staticmethod
-    def default_hparams():
+    def default_hparams(runner_name):
         model_hparams = hparams.ModelHparams(
             model_name='cifar_vgg_16',
             model_init='kaiming_normal',
@@ -104,6 +105,9 @@ class Model(base.Model):
             gamma=0.1,
             weight_decay=1e-4,
             training_steps='160ep'
+        )
+
+        testing_hparams = hparams.TestingHparams(
         )
 
         if runner_name == 'train':

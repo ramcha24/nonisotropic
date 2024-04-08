@@ -9,10 +9,11 @@ from testing.desc import TestingDesc
 
 
 class ResNet(torchvision.models.ResNet):
-    def __init__(self, block, layers, num_classes=1000, width=64):
+    def __init__(self, model_name, block, layers, num_classes=1000, width=64):
         """To make it possible to vary the width, we need to override the constructor of the torchvision resnet."""
 
         torch.nn.Module.__init__(self)  # Skip the parent constructor. This replaces it.
+        self.model_name = model_name 
         self._norm_layer = torch.nn.BatchNorm2d
         self.inplanes = width
         self.dilation = 1
@@ -91,14 +92,14 @@ class Model(base.Model):
             width = int(model_name.split('_')[3])
             model_fn = partial(model_fn, width=width)
 
-        return Model(model_fn, initializer, outputs)
+        return Model(model_name, model_fn, initializer, outputs)
 
     @property
     def loss_criterion(self):
         return self.criterion
 
     @staticmethod
-    def default_hparams():
+    def default_hparams(runner_name):
         """These hyperparameters will reach 76.1% top-1 accuracy on ImageNet.
 
         To get these results with a smaller batch size, scale the batch size linearly.
@@ -125,6 +126,9 @@ class Model(base.Model):
             weight_decay=1e-4,
             training_steps='90ep',
             warmup_steps='5ep',
+        )
+
+        testing_hparams = hparams.TestingHparams(
         )
 
         if runner_name == 'train':
