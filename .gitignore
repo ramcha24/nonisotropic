@@ -159,6 +159,9 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-./tiny-imagenet-200/
+./datasets/tiny-imagenet-200/
 ./datasets/cifar10/
 ./datasets/mnist/
+
+#checkpoint files 
+*.pt
