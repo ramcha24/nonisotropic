@@ -165,3 +165,7 @@ cython_debug/
 
 #checkpoint files 
 *.pt
+
+#images
+*.JPEG
+*.gz
