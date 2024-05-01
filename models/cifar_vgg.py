@@ -13,23 +13,23 @@ class Model(base.Model):
     class ConvModule(nn.Module):
         """A single convolutional module in a VGG network."""
 
-        def __init__(self, model_name, in_filters, out_filters):
+        def __init__(self, in_filters, out_filters):
             super(Model.ConvModule, self).__init__()
-            self.model_name = model_name
             self.conv = nn.Conv2d(in_filters, out_filters, kernel_size=3, padding=1)
             self.bn = nn.BatchNorm2d(out_filters)
 
         def forward(self, x):
             return F.relu(self.bn(self.conv(x)))
 
-    def __init__(self, plan, initializer, outputs=10):
+    def __init__(self, model_name, plan, initializer, outputs=10):
         super(Model, self).__init__()
+        self.model_name = model_name
 
         layers = []
         filters = 3
 
         for spec in plan:
-            if spec == 'M':
+            if spec == "M":
                 layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
             else:
                 layers.append(Model.ConvModule(filters, spec))
@@ -50,33 +50,74 @@ class Model(base.Model):
 
     @property
     def output_layer_names(self):
-        return ['fc.weight', 'fc.bias']
+        return ["fc.weight", "fc.bias"]
 
     @staticmethod
     def is_valid_model_name(model_name):
-        return (model_name.startswith('cifar_vgg_') and
-                len(model_name.split('_')) == 3 and
-                model_name.split('_')[2].isdigit() and
-                int(model_name.split('_')[2]) in [11, 13, 16, 19])
+        return (
+            model_name.startswith("cifar_vgg_")
+            and len(model_name.split("_")) == 3
+            and model_name.split("_")[2].isdigit()
+            and int(model_name.split("_")[2]) in [11, 13, 16, 19]
+        )
 
     @staticmethod
     def get_model_from_name(model_name, initializer, outputs=10):
         if not Model.is_valid_model_name(model_name):
-            raise ValueError('Invalid model name: {}'.format(model_name))
+            raise ValueError("Invalid model name: {}".format(model_name))
 
         outputs = outputs or 10
 
-        num = int(model_name.split('_')[2])
+        num = int(model_name.split("_")[2])
         if num == 11:
-            plan = [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
+            plan = [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512]
         elif num == 13:
-            plan = [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
+            plan = [64, 64, "M", 128, 128, "M", 256, 256, "M", 512, 512, "M", 512, 512]
         elif num == 16:
-            plan = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512]
+            plan = [
+                64,
+                64,
+                "M",
+                128,
+                128,
+                "M",
+                256,
+                256,
+                256,
+                "M",
+                512,
+                512,
+                512,
+                "M",
+                512,
+                512,
+                512,
+            ]
         elif num == 19:
-            plan = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512]
+            plan = [
+                64,
+                64,
+                "M",
+                128,
+                128,
+                "M",
+                256,
+                256,
+                256,
+                256,
+                "M",
+                512,
+                512,
+                512,
+                512,
+                "M",
+                512,
+                512,
+                512,
+                512,
+            ]
         else:
-            raise ValueError('Unknown VGG model: {}'.format(model_name))
+            raise ValueError("Unknown VGG model: {}".format(model_name))
 
         return Model(model_name, plan, initializer, outputs)
 
@@ -87,32 +128,34 @@ class Model(base.Model):
     @staticmethod
     def default_hparams(runner_name):
         model_hparams = hparams.ModelHparams(
-            model_name='cifar_vgg_16',
-            model_init='kaiming_normal',
-            batchnorm_init='uniform',
+            model_name="cifar_vgg_16",
+            model_init="kaiming_normal",
+            batchnorm_init="uniform",
         )
 
-        dataset_hparams = hparams.DatasetHparams(
-            dataset_name='cifar10',
-            batch_size=128
-        )
+        dataset_hparams = hparams.DatasetHparams(dataset_name="cifar10", batch_size=128)
 
         training_hparams = hparams.TrainingHparams(
-            optimizer_name='sgd',
+            optimizer_name="sgd",
             momentum=0.9,
-            milestone_steps='80ep,120ep',
+            milestone_steps="80ep,120ep",
             lr=0.1,
             gamma=0.1,
             weight_decay=1e-4,
-            training_steps='160ep'
+            training_steps="160ep",
         )
 
-        testing_hparams = hparams.TestingHparams(
-        )
+        testing_hparams = hparams.TestingHparams()
 
-        if runner_name == 'train':
+        if runner_name == "train":
             return TrainingDesc(model_hparams, dataset_hparams, training_hparams)
-        elif runner_name == 'test':
-            return TestingDesc(model_hparams, dataset_hparams, training_hparams, testing_hparams)
+        elif runner_name == "test":
+            return TestingDesc(
+                model_hparams, dataset_hparams, training_hparams, testing_hparams
+            )
         else:
-            raise ValueError("Cannot supply default hparams for an invalid runner - {}".format(runner_name))
+            raise ValueError(
+                "Cannot supply default hparams for an invalid runner - {}".format(
+                    runner_name
+                )
+            )

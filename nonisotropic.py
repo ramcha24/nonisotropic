@@ -4,6 +4,8 @@ import sys
 from cli import runner_registry
 from cli import arg_utils
 import platforms.registry
+from torch.distributed import init_process_group, destroy_process_group
+import torch
 
 
 def main():
@@ -54,6 +56,12 @@ def main():
 
     args = parser.parse_args()
     platform = platforms.registry.get(platform_name).create_from_args(args)
+    print("platform rank is")
+    print(platform.local_rank)
+    print(platform.torch_device)
+    print("platform global rank is")
+    print(platform.global_rank)
+
     if args.display_output_location:
         platform.run_job(
             runner_registry.get(runner_name)
@@ -62,7 +70,13 @@ def main():
         )
         sys.exit(0)
 
+    if platform.is_distributed:
+        init_process_group(backend="nccl")
+
     platform.run_job(runner_registry.get(runner_name).create_from_args(args).run)
+
+    if platform.is_distributed:
+        destroy_process_group()
 
 
 if __name__ == "__main__":

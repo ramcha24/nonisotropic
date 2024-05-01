@@ -169,6 +169,8 @@ cython_debug/
 /datasets/cifar-100-python/
 /datasets/cifar10/cifar-10-batches-py/
 
+/runner_data/
+
 #checkpoint files 
 *.pt
 *.pth
@@ -181,3 +183,4 @@ cython_debug/
 #images 
 *.JPEG
 *.png
+*.jpg

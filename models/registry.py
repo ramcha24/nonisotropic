@@ -5,7 +5,13 @@ from models import mnist_lenet, mnist_conv, cifar_resnet, cifar_vgg, imagenet_re
 from models import bn_initializers, initializers
 from platforms.platform import get_platform
 
-registered_models = [mnist_lenet.Model, mnist_conv.Model, cifar_resnet.Model, cifar_vgg.Model, imagenet_resnet.Model]
+registered_models = [
+    mnist_lenet.Model,
+    mnist_conv.Model,
+    cifar_resnet.Model,
+    cifar_vgg.Model,
+    imagenet_resnet.Model,
+]
 
 
 def get(model_hparams: ModelHparams, outputs=None):
@@ -58,12 +64,9 @@ def exists(save_location, save_step):
 
 def get_default_hparams(model_name, runner_name):
     """Get the default hyperparameters for a particular model."""
-    print("Model name is : " + str(model_name))
-    print("Runner name is : " + str(runner_name))
 
     for registered_model in registered_models:
         if registered_model.is_valid_model_name(model_name):
-            print("Reached here")
             params = registered_model.default_hparams(runner_name)
             params.model_hparams.model_name = model_name
             return params

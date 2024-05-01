@@ -9,11 +9,10 @@ from testing.desc import TestingDesc
 
 
 class ResNet(torchvision.models.ResNet):
-    def __init__(self, model_name, block, layers, num_classes=1000, width=64):
+    def __init__(self, block, layers, num_classes=1000, width=64):
         """To make it possible to vary the width, we need to override the constructor of the torchvision resnet."""
 
         torch.nn.Module.__init__(self)  # Skip the parent constructor. This replaces it.
-        self.model_name = model_name 
         self._norm_layer = torch.nn.BatchNorm2d
         self.inplanes = width
         self.dilation = 1
@@ -21,25 +20,35 @@ class ResNet(torchvision.models.ResNet):
         self.base_width = 64
 
         # The initial convolutional layer.
-        self.conv1 = torch.nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = torch.nn.Conv2d(
+            3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False
+        )
         self.bn1 = self._norm_layer(self.inplanes)
         self.relu = torch.nn.ReLU(inplace=True)
         self.maxpool = torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         # The subsequent blocks.
         self.layer1 = self._make_layer(block, width, layers[0])
-        self.layer2 = self._make_layer(block, width*2, layers[1], stride=2, dilate=False)
-        self.layer3 = self._make_layer(block, width*4, layers[2], stride=2, dilate=False)
-        self.layer4 = self._make_layer(block, width*8, layers[3], stride=2, dilate=False)
+        self.layer2 = self._make_layer(
+            block, width * 2, layers[1], stride=2, dilate=False
+        )
+        self.layer3 = self._make_layer(
+            block, width * 4, layers[2], stride=2, dilate=False
+        )
+        self.layer4 = self._make_layer(
+            block, width * 8, layers[3], stride=2, dilate=False
+        )
 
         # The last layers.
         self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = torch.nn.Linear(width*8*block.expansion, num_classes)
+        self.fc = torch.nn.Linear(width * 8 * block.expansion, num_classes)
 
         # Default init.
         for m in self.modules():
             if isinstance(m, torch.nn.Conv2d):
-                torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                torch.nn.init.kaiming_normal_(
+                    m.weight, mode="fan_out", nonlinearity="relu"
+                )
             elif isinstance(m, torch.nn.BatchNorm2d):
                 torch.nn.init.constant_(m.weight, 1)
                 torch.nn.init.constant_(m.bias, 0)
@@ -48,9 +57,9 @@ class ResNet(torchvision.models.ResNet):
 class Model(base.Model):
     """A residual neural network as originally designed for ImageNet."""
 
-    def __init__(self, model_fn, initializer, outputs=None):
+    def __init__(self, model_name, model_fn, initializer, outputs=None):
         super(Model, self).__init__()
-
+        self.model_name = model_name
         self.model = model_fn(num_classes=outputs or 1000)
         self.criterion = torch.nn.CrossEntropyLoss()
         self.apply(initializer)
@@ -60,36 +69,59 @@ class Model(base.Model):
 
     @property
     def output_layer_names(self):
-        return ['model.fc.weight', 'model.fc.bias']
+        return ["model.fc.weight", "model.fc.bias"]
 
     @staticmethod
     def is_valid_model_name(model_name):
-        return (model_name.startswith('imagenet_resnet_') and
-                4 >= len(model_name.split('_')) >= 3 and
-                model_name.split('_')[2].isdigit() and
-                int(model_name.split('_')[2]) in [18, 34, 50, 101, 152, 200])
+        return (
+            model_name.startswith("imagenet_resnet_")
+            and 4 >= len(model_name.split("_")) >= 3
+            and model_name.split("_")[2].isdigit()
+            and int(model_name.split("_")[2]) in [18, 34, 50, 101, 152, 200]
+        )
 
     @staticmethod
-    def get_model_from_name(model_name, initializer,  outputs=1000):
+    def get_model_from_name(model_name, initializer, outputs=1000):
         """Name: imagenet_resnet_D[_W].
 
         D is the model depth (e.g., 50 for ResNet-50). W is the model width - the number of filters in the first
         residual layers. By default, this number is 64."""
 
         if not Model.is_valid_model_name(model_name):
-            raise ValueError('Invalid model name: {}'.format(model_name))
+            raise ValueError("Invalid model name: {}".format(model_name))
 
-        num = int(model_name.split('_')[2])
-        if num == 18: model_fn = partial(ResNet, torchvision.models.resnet.BasicBlock, [2, 2, 2, 2])
-        elif num == 34: model_fn = partial(ResNet, torchvision.models.resnet.BasicBlock, [3, 4, 6, 3])
-        elif num == 50: model_fn = partial(ResNet, torchvision.models.resnet.Bottleneck, [3, 4, 6, 3])
-        elif num == 101: model_fn = partial(ResNet, torchvision.models.resnet.Bottleneck, [3, 4, 23, 3])
-        elif num == 152: model_fn = partial(ResNet, torchvision.models.resnet.Bottleneck, [3, 8, 36, 3])
-        elif num == 200: model_fn = partial(ResNet, torchvision.models.resnet.Bottleneck, [3, 24, 36, 3])
-        elif num == 269: model_fn = partial(ResNet, torchvision.moedls.resnet.Bottleneck, [3, 30, 48, 8])
+        num = int(model_name.split("_")[2])
+        if num == 18:
+            model_fn = partial(
+                ResNet, torchvision.models.resnet.BasicBlock, [2, 2, 2, 2]
+            )
+        elif num == 34:
+            model_fn = partial(
+                ResNet, torchvision.models.resnet.BasicBlock, [3, 4, 6, 3]
+            )
+        elif num == 50:
+            model_fn = partial(
+                ResNet, torchvision.models.resnet.Bottleneck, [3, 4, 6, 3]
+            )
+        elif num == 101:
+            model_fn = partial(
+                ResNet, torchvision.models.resnet.Bottleneck, [3, 4, 23, 3]
+            )
+        elif num == 152:
+            model_fn = partial(
+                ResNet, torchvision.models.resnet.Bottleneck, [3, 8, 36, 3]
+            )
+        elif num == 200:
+            model_fn = partial(
+                ResNet, torchvision.models.resnet.Bottleneck, [3, 24, 36, 3]
+            )
+        elif num == 269:
+            model_fn = partial(
+                ResNet, torchvision.moedls.resnet.Bottleneck, [3, 30, 48, 8]
+            )
 
-        if len(model_name.split('_')) == 4:
-            width = int(model_name.split('_')[3])
+        if len(model_name.split("_")) == 4:
+            width = int(model_name.split("_")[3])
             model_fn = partial(model_fn, width=width)
 
         return Model(model_name, model_fn, initializer, outputs)
@@ -107,33 +139,38 @@ class Model(base.Model):
         """
 
         model_hparams = hparams.ModelHparams(
-            model_name='imagenet_resnet_50',
-            model_init='kaiming_normal',
-            batchnorm_init='uniform',
+            model_name="imagenet_resnet_50",
+            model_init="kaiming_normal",
+            batchnorm_init="uniform",
         )
 
         dataset_hparams = hparams.DatasetHparams(
-            dataset_name='imagenet',
+            dataset_name="imagenet",
             batch_size=1024,
         )
 
         training_hparams = hparams.TrainingHparams(
-            optimizer_name='sgd',
+            optimizer_name="sgd",
             momentum=0.9,
-            milestone_steps='30ep,60ep,80ep',
+            milestone_steps="30ep,60ep,80ep",
             lr=0.4,
             gamma=0.1,
             weight_decay=1e-4,
-            training_steps='90ep',
-            warmup_steps='5ep',
+            training_steps="90ep",
+            warmup_steps="5ep",
         )
 
-        testing_hparams = hparams.TestingHparams(
-        )
+        testing_hparams = hparams.TestingHparams()
 
-        if runner_name == 'train':
+        if runner_name == "train":
             return TrainingDesc(model_hparams, dataset_hparams, training_hparams)
-        elif runner_name == 'test':
-            return TestingDesc(model_hparams, dataset_hparams, training_hparams, testing_hparams)
+        elif runner_name == "test":
+            return TestingDesc(
+                model_hparams, dataset_hparams, training_hparams, testing_hparams
+            )
         else:
-            raise ValueError("Cannot supply default hparams for an invalid runner - {}".format(runner_name))
+            raise ValueError(
+                "Cannot supply default hparams for an invalid runner - {}".format(
+                    runner_name
+                )
+            )
