@@ -145,8 +145,7 @@ class Model(base.Model):
         )
 
         dataset_hparams = hparams.DatasetHparams(
-            dataset_name="imagenet",
-            batch_size=1024,
+            dataset_name="imagenet", batch_size=256, num_classes=1000
         )
 
         training_hparams = hparams.TrainingHparams(

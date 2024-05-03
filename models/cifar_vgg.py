@@ -133,7 +133,9 @@ class Model(base.Model):
             batchnorm_init="uniform",
         )
 
-        dataset_hparams = hparams.DatasetHparams(dataset_name="cifar10", batch_size=128)
+        dataset_hparams = hparams.DatasetHparams(
+            dataset_name="cifar10", batch_size=128, num_classes=10
+        )
 
         training_hparams = hparams.TrainingHparams(
             optimizer_name="sgd",

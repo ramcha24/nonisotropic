@@ -45,12 +45,28 @@ class Dataset(base.ImageDataset):
         return 10
 
     @staticmethod
+    def dataset_name():
+        return "cifar10"
+
+    @staticmethod
+    def transforms():
+        return torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(
+                    (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+                ),
+            ]
+        )
+
+    @staticmethod
     def get_train_set(use_augmentation=False):
         # augment = [torchvision.transforms.RandomHorizontalFlip(), torchvision.transforms.RandomCrop(32, 4)]
         train_set = CIFAR10(
             train=True,
-            root=os.path.join(get_platform().dataset_root, "cifar10"),
+            root=os.path.join(get_platform().dataset_root, Dataset.dataset_name()),
             download=True,
+            transform=Dataset.transforms(),
         )
         # return Dataset(train_set.data, np.array(train_set.targets), augment if use_augmentation else [])
         return Dataset(train_set.data, np.array(train_set.targets))
@@ -59,16 +75,16 @@ class Dataset(base.ImageDataset):
     def get_test_set():
         test_set = CIFAR10(
             train=False,
-            root=os.path.join(get_platform().dataset_root, "cifar10"),
+            root=os.path.join(get_platform().dataset_root, Dataset.dataset_name()),
             download=True,
         )
         return Dataset(test_set.data, np.array(test_set.targets))
 
     def __init__(self, examples, labels):
-        # tensor_transforms = [torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])]
         tensor_transforms = [
             torchvision.transforms.Normalize(
-                mean=[0.5, 0.5, 0.5], std=[32 * math.sqrt(3) * 0.5] * 3
+                mean=[0.4914, 0.4822, 0.4465],
+                std=[0.2023, 0.1994, 0.2010],
             )
         ]
         super(Dataset, self).__init__(examples, labels, [], tensor_transforms)

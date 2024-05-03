@@ -1,9 +1,33 @@
 import torch
+import math 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from platforms.platform import get_platform
 from foundations import paths
+
+
+def compute_prob(data, steps=100, start=0.001, end=1, tail=True, log_scale=False):
+    max_val = torch.max(data)
+    min_val = torch.min(data)
+    num = torch.numel(data)
+
+    if log_scale:
+        threshold = torch.logspace(math.log10(start), math.log10(end), steps)
+    else:
+        threshold = torch.linspace(start, end, steps)
+
+    threshold = min_val + threshold * (max_val - min_val)
+
+    prob = torch.zeros(steps, device="cpu")
+
+    for i in range(steps):
+        if tail:
+            prob[i] = torch.sum(data > threshold[i]) / num
+        else:
+            prob[i] = torch.sum(data <= threshold[i]) / num
+
+    return prob, threshold
 
 
 def correct(labels, output):
@@ -30,22 +54,32 @@ def get_soft_margin(model, batch_x, batch_y, Mrgs, Accs, Actual_Mrgs):
 def report_adv(model, examples, labels, delta):
     model.eval()
     i = 41
-    x = examples[i:i + 1, :, :, :]
-    true_y = labels[i:i + 1]
-    pert = delta[i:i + 1, :, :, :]
+    x = examples[i : i + 1, :, :, :]
+    true_y = labels[i : i + 1]
+    pert = delta[i : i + 1, :, :, :]
     std_out = model(x)
     adv_out = model(x + pert)
     std_y = std_out.argmax(dim=1)
     adv_y = adv_out.argmax(dim=1)
     std_loss = model.loss_criterion(std_out, true_y)
     adv_loss = model.loss_criterion(adv_out, true_y)
-    print('shape of std out is {}'.format(std_out.shape))
-    std_margin = std_out[0, true_y] - torch.max(std_out[0][torch.arange(10) != true_y.item()])
-    adv_margin = adv_out[0, true_y] - torch.max(adv_out[0][torch.arange(10) != true_y.item()])
-    print('norm of initial input is {}'.format(torch.norm(x)))
-    print('norm of delta is {}'.format(torch.norm(pert)))
-    print('true label is {}'.format(true_y))
-    print('predicted label before attack is {} with loss {} at margin {}'.format(std_y.item(), std_loss,
-                                                                                 std_margin.item()))
-    print('predicted label after attack is {} with loss {} at margin {}'.format(adv_y.item(), adv_loss,
-                                                                                adv_margin.item()))
+    print("shape of std out is {}".format(std_out.shape))
+    std_margin = std_out[0, true_y] - torch.max(
+        std_out[0][torch.arange(10) != true_y.item()]
+    )
+    adv_margin = adv_out[0, true_y] - torch.max(
+        adv_out[0][torch.arange(10) != true_y.item()]
+    )
+    print("norm of initial input is {}".format(torch.norm(x)))
+    print("norm of delta is {}".format(torch.norm(pert)))
+    print("true label is {}".format(true_y))
+    print(
+        "predicted label before attack is {} with loss {} at margin {}".format(
+            std_y.item(), std_loss, std_margin.item()
+        )
+    )
+    print(
+        "predicted label after attack is {} with loss {} at margin {}".format(
+            adv_y.item(), adv_loss, adv_margin.item()
+        )
+    )

@@ -4,6 +4,7 @@ import torch
 
 from datasets.base import DataLoader
 import datasets.registry
+from datasets.greedy_subset import load_greedy_subset
 
 from foundations import hparams
 from foundations import paths
@@ -17,7 +18,9 @@ from training.checkpointing import restore_checkpoint
 from training import optimizers
 from training import standard_callbacks
 from training.metric_logger import MetricLogger
+
 from attacks.adv_train_util import get_attack
+from attacks.projected_displacement import non_isotropic_projection
 from utilities.capacity_utils import get_classifier_constant, get_feature_reg
 from utilities.evaluation_utils import report_adv
 
@@ -29,10 +32,8 @@ def train(
     train_loader: DataLoader,
     output_location: str,
     callbacks: typing.List[typing.Callable] = [],
-    adv_attack: typing.Callable = None,
     start_step: Step = None,
     end_step: Step = None,
-    dataset_name: str = "mnist",
 ):
 
     """The main training loop for this framework.
@@ -96,6 +97,13 @@ def train(
     if end_step <= start_step:
         return
 
+    if (
+        dataset_hparams.non_isotropic_augment
+        or dataset_hparams.non_isotropic_mixup
+        or (training_hparams.adv_train and training_hparams.non_isotropic_adv)
+    ):
+        greedy_subsets = load_greedy_subset(dataset_hparams)
+
     # The training loop.
     for epoch in range(start_step.ep, end_step.ep + 1):
         # Ensure the data order is different for each epoch.
@@ -124,21 +132,63 @@ def train(
             examples = examples.to(device=get_platform().torch_device)
             labels = labels.to(device=get_platform().torch_device)
             labels_size = torch.tensor(len(labels), device=get_platform().torch_device)
-            # print('batch size initially is {}'.format(labels_size))
+            print("batch size initially is {}".format(labels_size))
 
-            if dataset_hparams.gaussian_augment:
-                augment_examples = torch.zeros_like(examples).to(
+            if dataset_hparams.non_isotropic_mixup:
+                shuffle_indices = torch.randperm(len(labels))
+                perturbation = non_isotropic_projection(
+                    examples,
+                    labels,
+                    examples[shuffle_indices],
+                    greedy_subsets,
+                    threshold=dataset_hparams.non_isotropic_projection_threshold,
+                )
+                examples = torch.cat((examples, examples + perturbation), dim=0)
+                labels = torch.cat((labels, labels), dim=0)
+                labels_size = torch.tensor(
+                    len(labels), device=get_platform().torch_device
+                )
+                print("batch size after mixup augmentation is {}".format(labels_size))
+
+            if (
+                dataset_hparams.gaussian_augment
+                or dataset_hparams.non_isotropic_augment
+            ):
+                perturbation = torch.zeros_like(examples).to(
                     device=get_platform().torch_device
                 )
-                augment_examples.normal_(
+                perturbation.normal_(
                     dataset_hparams.gaussian_aug_mean, dataset_hparams.gaussian_aug_std
                 )
-                examples = torch.cat((examples, augment_examples), dim=0)
-                labels = torch.cat((labels, labels), dim=0)
 
-            delta = torch.zeros_like(examples).to(device=get_platform().torch_device)
-            if adv_attack and training_hparams.adv_train:
-                delta = adv_attack(
+                if dataset_hparams.non_isotropic_augment:
+                    # project perturbation to be within epsilon sublevel set of the threat function
+                    perturbation = non_isotropic_projection(
+                        examples,
+                        labels,
+                        perturbation,
+                        greedy_subsets,
+                        threshold=dataset_hparams.non_isotropic_projection_threshold,
+                    )
+
+                examples = torch.cat((examples, examples + perturbation), dim=0)
+                labels = torch.cat((labels, labels), dim=0)
+                labels_size = torch.tensor(
+                    len(labels), device=get_platform().torch_device
+                )
+                print(
+                    "batch size after Gaussian/Non-isotropic projection augmentation is {}".format(
+                        labels_size
+                    )
+                )
+
+            if (
+                training_hparams.adv_train
+                and epoch >= training_hparams.adv_train_start_epoch
+            ):
+                attack_fn = get_attack(training_hparams)
+
+                delta = attack_fn(
                     model,
                     examples,
                     labels,
@@ -150,6 +200,10 @@ def train(
                 if (epoch % 2 == 0) and (iteration == 0):
                     report_adv(model, examples, labels, delta)
 
+                if training_hparams.nonisotropic_adv:
+                    # project delta to be within epsilon sublevel set of the threat function
+                    continue
+
                 examples = torch.cat((examples, examples + delta), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
                 # labels_size = torch.tensor(len(labels), device=get_platform().torch_device)
@@ -158,8 +212,6 @@ def train(
             step_optimizer.zero_grad()
             model.train()
             loss = model.loss_criterion(model(examples), labels)
-            # if training_hparams.feature_reg:
-            #    loss += get_feature_reg(model, examples, labels, training_hparams)
             loss.backward()
 
             # Step forward. Ignore warnings that the lr_schedule generates.
@@ -194,14 +246,13 @@ def standard_train(
 
     # penultimate_ep = "38ep"
     # train_penultimate_step = Step.from_str(penultimate_ep, iterations_per_epoch)
+
     train_loader = datasets.registry.get(dataset_hparams, train=True)
     test_loader = datasets.registry.get(dataset_hparams, train=False)
-    name = dataset_hparams.dataset_name
+
     if get_platform().is_primary_process:
         print("Model name is : " + str(model.model_name))
-        print("Dataset name is : " + str(name))
-
-    adv_attack = get_attack(training_hparams)
+        print("Dataset name is : " + str(dataset_hparams.dataset_name))
 
     callbacks = standard_callbacks.standard_callbacks(
         training_hparams,
@@ -219,7 +270,5 @@ def standard_train(
         train_loader,
         output_location,
         callbacks,
-        adv_attack,
         start_step=start_step,
-        dataset_name=name,
     )

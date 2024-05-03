@@ -22,7 +22,6 @@ minimization_attacks = {
     'min_deepfool': fa.L2DeepFoolAttack(),
 }
 
-
 def get_possible_attacks():
     pos = ''
     for attack_str in fixed_size_attacks_l2.keys():

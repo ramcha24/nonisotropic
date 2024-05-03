@@ -78,7 +78,8 @@ class Model(base.Model):
 
         dataset_hparams = hparams.DatasetHparams(
             dataset_name='mnist',
-            batch_size=128
+            batch_size=128,
+            num_classes=10
         )
 
         training_hparams = hparams.TrainingHparams(

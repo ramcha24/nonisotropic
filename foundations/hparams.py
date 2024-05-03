@@ -167,6 +167,10 @@ class DatasetHparams(Hparams):
     gaussian_augment: bool = False
     gaussian_aug_mean: float = 0.0
     gaussian_aug_std: float = 1.0
+    greedy_per_label: int = 50
+    non_isotropic_augment: bool = True
+    non_isotropic_projection_threshold: float = 0.4
+    non_isotropic_mixup: bool = True
 
     _name: str = "Dataset Hyperparameters"
     _description: str = "Hyperparameters that select the dataset, data augmentation, and other data transformations."
@@ -198,6 +202,12 @@ class DatasetHparams(Hparams):
     _gaussian_aug_std: str = (
         "Std Deviation of added gaussian noise, ignored if gaussian_augment == False"
     )
+    _greedy_per_label: str = "Number of points to select per label for greedy subset"
+    _non_isotropic_augment: str = (
+        "Add non-isotropic noise augmentation to the dataset during training"
+    )
+    _non_isotropic_mixup: str = "Mixup the dataset with non-isotropic projection"
+    _non_isotropic_projection_threshold: str = "Threshold for non-isotropic augmentation, ignored if non_isotropic_augment == False or non_isotropic_mixup == False"
 
 
 @dataclass
@@ -234,6 +244,9 @@ class TrainingHparams(Hparams):
     adv_train_attack_norm: str = "2"
     adv_train_attack_power: float = 1.5
     adv_train_attack_iter: int = 20
+    adv_train_start_epoch: int = 30
+    non_isotropic_adv: bool = True
+    non_isotropic_training_threshold: float = float("inf")
 
     _name: str = "Training Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is trained."
@@ -263,6 +276,11 @@ class TrainingHparams(Hparams):
         "Power of white-box adversary, step size is always 1/10 of this"
     )
     _adv_train_attack_iter: str = "Number of iterations of an iterative adversarial attack (ignored otherwise) almost always 20"
+    _adv_train_start_epoch: str = "Epoch to start adversarial training"
+    _non_isotropic_adv: str = "Employ non-isotropic adversarial training"
+    _non_isotropic_training_threhsold: str = (
+        "Threshold for non-isotropic adversarial training"
+    )
 
 
 @dataclass
