@@ -172,7 +172,7 @@ class DatasetHparams(Hparams):
     gaussian_aug_std: float = 1.0
     greedy_per_label: int = 50
     non_isotropic_augment: bool = False
-    non_isotropic_projection_threshold: float = 0.4
+    non_isotropic_projection_threshold: float = 0.1
     non_isotropic_mixup: bool = False
 
     _name: str = "Dataset Hyperparameters"
@@ -252,9 +252,9 @@ class TrainingHparams(Hparams):
     adv_train_attack_norm: str = "2"
     adv_train_attack_power: float = 1.5
     adv_train_attack_iter: int = 20
-    adv_train_start_epoch: int = 20
+    adv_train_start_epoch: int = 5
     non_isotropic_adv_train: bool = False
-    non_isotropic_training_threshold: float = 0.3
+    non_isotropic_training_threshold: float = 0.1
 
     _name: str = "Training Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is trained."

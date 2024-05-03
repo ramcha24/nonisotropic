@@ -14,6 +14,21 @@ def partial_threat_fn(
     all_pairs=False,
     return_all=False,
 ):
+    if reference_inputs.isnan().any() and get_platform().is_primary_process:
+        print("INSIDE PARTIAL_THREAT BUT REFERENCE points already contain NAN!")
+
+        return
+
+    if perturbed_inputs.isnan().any() and get_platform().is_primary_process:
+        print("INSIDE PARTIAL_THREAT BUT perturbed points already contain NAN!")
+
+        return
+
+    if anchor_points.isnan().any() and get_platform().is_primary_process:
+        print("INSIDE PARTIAL_THREAT BUT  ANCHOR points already contain NAN!")
+
+        return
+
     assert (
         reference_inputs.shape[1] == anchor_points.shape[1]
     ), "Reference and threat specification shapes do not match got {} and {}".format(
@@ -29,10 +44,20 @@ def partial_threat_fn(
 
     # assuming batch of flat inputs, perturbations and threats
     unsafe_directions = -(reference_inputs.unsqueeze(1) - anchor_points)
-    # print("shape of unsafe direction is " + str(unsafe_directions.shape))
+    if unsafe_directions.isnan().any() and get_platform().is_primary_process:
+        print("Warning!!! Inside partial threats, Unsafe directions has NaN values")
+        print("shape of unsafe direction is " + str(unsafe_directions.shape))
 
-    unsafe_norms = torch.linalg.norm(unsafe_directions, dim=2, ord=2) ** 2
-    # print("shape of unsafe normalization is " + str(unsafe_norms.shape))
+    unsafe_norms = torch.linalg.norm(unsafe_directions, dim=2, ord=2) ** 2 + 1e-2
+    if unsafe_norms.isnan().any() and get_platform().is_primary_process:
+        print("Warning!!! Inside partial threats, Unsafe norms has NaN values")
+
+    # slower but hopefully error free:
+    # for _i in range(unsafe_directions.shape[0]):
+    #     for _j in range(unsafe_directions.shape[1]):
+    #         unsafe_directions[_i][_j] = unsafe_directions[_i][_j].div(
+    #             unsafe_norms[_i][_j] + 1e-2
+    #         )
 
     unsafe_directions = unsafe_directions / unsafe_norms.unsqueeze(-1)
 
@@ -41,6 +66,21 @@ def partial_threat_fn(
         scaled_projections[reference_labels == anchor_labels[0]] = 0.0
 
     partial_threats = torch.max(scaled_projections, dim=2).values
+
+    if unsafe_directions.isnan().any() and get_platform().is_primary_process:
+        print(
+            "Warning!!! Inside partial threats, Unsafe directions has NaN values, definitely because of unsafe norms"
+        )
+        print("shape of unsafe direction is " + str(unsafe_directions.shape))
+        print("shape of unsafe normalization is " + str(unsafe_norms.shape))
+        print(
+            "shape of unsqueezed unsafe normalization is "
+            + str(unsafe_norms.unsqueeze(-1).shape)
+        )
+        print(unsafe_norms.isnan().any())
+
+    if scaled_projections.isnan().any() and get_platform().is_primary_process:
+        print("Warning!!! Inside partial threats, scaled projections has NaN values")
 
     if return_all:
         return (
@@ -154,8 +194,9 @@ def non_isotropic_projection(
     reference_labels,
     perturbed_inputs,
     greedy_subsets,
-    threshold=0.5,
-    num_iterations=20,
+    threshold=0.1,
+    num_iterations=10,
+    verbose=False,
 ):
     # ref_input : B x input_shape
     # Perturbations : B x input_shape
@@ -185,7 +226,7 @@ def non_isotropic_projection(
 
     current_perturbations = -(reference_inputs - perturbed_inputs)
     # if get_platform().is_primary_process:
-    #     print("\nCurrent perturbation shape is {}".format(current_perturbations.shape))
+    #     print("\n About to start projection")
 
     for t in range(num_iterations):
         for threat_label in range(0, num_labels):
@@ -195,6 +236,13 @@ def non_isotropic_projection(
             )
             anchor_points = torch.flatten(anchor_points, start_dim=1)
 
+            # if get_platform().is_primary_process:
+            #     print(
+            #         "About to call partial_threat_fn in iteration {} w.r.t threat label {}".format(
+            #             t, threat_label
+            #         )
+            #     )
+
             (
                 partial_threats,
                 unsafe_directions,
@@ -203,12 +251,51 @@ def non_isotropic_projection(
             ) = partial_threat_fn(
                 reference_inputs,
                 reference_labels,
-                perturbed_inputs,
+                reference_inputs + current_perturbations,
                 anchor_points,
                 [threat_label],
                 return_all=True,
             )
+            # The code snippet is checking if there are any NaN values in the `unsafe_directions` and
+            # if the current process is the primary process. If there are NaN values present and the
+            # current process is the primary process, it will print a warning message indicating that
+            # there are unsafe directions with NaN values after a certain iteration with respect to a
+            # threat label.
+            if unsafe_directions.isnan().any() and get_platform().is_primary_process:
+                print(
+                    "Warning!!! Unsafe directions after iteration {} projection w.r.t threat label {} has NaN values".format(
+                        t, threat_label
+                    )
+                )
+                return
+
+            if unsafe_norms.isnan().any() and get_platform().is_primary_process:
+                print(
+                    "Warning!!! Unsafe norms after iteration {} projection w.r.t threat label {} has NaN values".format(
+                        t, threat_label
+                    )
+                )
+                return
+
+            if scaled_projections.isnan().any() and get_platform().is_primary_process:
+                print(
+                    "Warning!!! scaled projections after iteration {} projection w.r.t threat label {} has NaN values".format(
+                        t, threat_label
+                    )
+                )
+                return
+
+            if partial_threats.isnan().any() and get_platform().is_primary_process:
+                print(
+                    "Warning!!! partial threats after iteration {} projection w.r.t threat label {} has NaN values".format(
+                        t, threat_label
+                    )
+                )
+                return
+
             partial_threats = torch.nan_to_num(partial_threats, nan=1.0)
+            if partial_threats.max() <= threshold:
+                continue  # no need to project
 
             # if get_platform().is_primary_process:
             #     print(
@@ -250,11 +337,23 @@ def non_isotropic_projection(
             #     print("\nMax unsafe norms shape is {}".format(max_unsafe_norms.shape))
             #     print("\nResiduals shape is {}".format(residuals.shape))
 
-            step_size = residuals * torch.sqrt(max_unsafe_norms.squeeze(1))
+            step_size = residuals * (
+                max_unsafe_norms.squeeze(1)
+            )  # torch.sqrt(max_unsafe_norms.squeeze(1))?
             # if get_platform().is_primary_process:
             #     print("\nStep size shape is {}".format(step_size.shape))
 
-            current_perturbations -= max_unsafe_directions * step_size[:, None]
+            current_perturbations -= 2.0 * max_unsafe_directions * step_size[:, None]
+            if (
+                current_perturbations.isnan().any()
+                and get_platform().is_primary_process
+            ):
+                print(
+                    "Warning!!! Current perturbations after iteration {} projection w.r.t threat label {} has NaN values".format(
+                        t, threat_label
+                    )
+                )
+                return
 
     current_perturbations = current_perturbations.squeeze(1)
 
@@ -268,18 +367,24 @@ def non_isotropic_projection(
     temp_max = torch.nan_to_num(threats, nan=-1).max()
     threats = torch.nan_to_num(threats, nan=temp_max)
     max_threat_ap = threats.max()
-    # if get_platform().is_primary_process:
-    #     print(
-    #         "Max threat : Before projection was {} and after projection is {}".format(
-    #             max_threat_bp, max_threat_ap
-    #         )
-    #     )
+    if get_platform().is_primary_process and verbose:
+        print(
+            "Max threat : Before projection was {} and after projection is {}".format(
+                max_threat_bp, max_threat_ap
+            )
+        )
 
     # undo flattening
     reference_inputs = torch.unflatten(reference_inputs, 1, input_shape)
     current_perturbations = torch.unflatten(current_perturbations, 1, input_shape)
 
+    if current_perturbations.isnan().any() and get_platform().is_primary_process:
+        print("Warning!!! Current perturbations after projection has NaN values")
+
+    if max_threat_ap.isnan().any() and get_platform().is_primary_process:
+        print("Warning!!! the max threat of projections is nan!")
+
     if max_threat_ap <= threshold:
         return reference_inputs + current_perturbations
     else:
-        return reference_inputs + current_perturbations / max_threat_ap
+        return reference_inputs + current_perturbations * (threshold / max_threat_ap)

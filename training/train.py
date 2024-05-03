@@ -113,7 +113,11 @@ def train(
         )
 
         for iteration, (examples, labels) in enumerate(train_loader):
-            if iteration % 100 <= 5 and get_platform().is_primary_process:
+            if (
+                epoch % 5 == 0
+                and iteration % 25 == 0
+                and get_platform().is_primary_process
+            ):
                 print("At epoch, iteration ({} {})".format(epoch, iteration))
 
             # Advance the data loader until the start epoch and iteration
@@ -140,8 +144,24 @@ def train(
             #         )
             #     )
             #     print_count += 1
+            if examples.isnan().any() and get_platform().is_primary_process:
+                print(
+                    "Warning!!! Examples have NaN values before augmentation! (WTF) at epoch {}, iteration {}".format(
+                        epoch, iteration
+                    )
+                )
+                return
 
             if dataset_hparams.non_isotropic_mixup:
+                if get_platform().is_primary_process and (
+                    epoch % 5 == 0 and iteration % 25 == 0
+                ):
+                    print(
+                        "About to do mixup augmentation at epoch {}, iteration {}".format(
+                            epoch, iteration
+                        )
+                    )
+
                 shuffle_indices = torch.randperm(len(labels))
                 perturbed_examples = non_isotropic_projection(
                     examples,
@@ -149,6 +169,7 @@ def train(
                     examples[shuffle_indices],
                     greedy_subsets,
                     threshold=dataset_hparams.non_isotropic_projection_threshold,
+                    verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                 )
                 examples = torch.cat((examples, perturbed_examples), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
@@ -171,10 +192,19 @@ def train(
                     device=get_platform().torch_device
                 )
                 perturbation.normal_(
-                    dataset_hparams.gaussian_aug_mean, dataset_hparams.gaussian_aug_std
+                    dataset_hparams.gaussian_aug_mean,
+                    10 * dataset_hparams.gaussian_aug_std,
                 )
 
                 if dataset_hparams.non_isotropic_augment:
+                    if get_platform().is_primary_process and (
+                        epoch % 5 == 0 and iteration % 25 == 0
+                    ):
+                        print(
+                            "About to do projecion augmentation at epoch {}, iteration {}".format(
+                                epoch, iteration
+                            )
+                        )
                     # project perturbation to be within epsilon sublevel set of the threat function
                     perturbed_examples = non_isotropic_projection(
                         examples,
@@ -182,13 +212,27 @@ def train(
                         perturbation,
                         greedy_subsets,
                         threshold=dataset_hparams.non_isotropic_projection_threshold,
+                        verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                     )
+                    perturbation = perturbed_examples - examples
 
-                examples = torch.cat((examples, perturbed_examples), dim=0)
+                perturbation = torch.min(
+                    torch.max(perturbation.detach(), -examples), 1 - examples
+                )  # clip examples+perturbation to [0,1]
+
+                examples = torch.cat((examples, examples + perturbation), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
                 labels_size = torch.tensor(
                     len(labels), device=get_platform().torch_device
                 )
+                if examples.isnan().any() and get_platform().is_primary_process:
+                    print(
+                        "Warning!!! Examples have NaN values after nonisotropic augmentation! at epoch {}, iteration {}".format(
+                            epoch, iteration
+                        )
+                    )
+                    return
+
                 # if print_count < 10 and get_platform().is_primary_process:
                 #     print(
                 #         "\n batch size in {} gpu after Non-isotropic projection augmentation is {}".format(
@@ -200,15 +244,12 @@ def train(
             if (
                 training_hparams.non_isotropic_adv_train or training_hparams.adv_train
             ) and epoch >= training_hparams.adv_train_start_epoch:
-                if (
-                    epoch < training_hparams.adv_train_start_epoch + 6
-                    and get_platform().is_primary_process
-                ):
-                    print("Starting adversarial training at epoch {}".format(epoch))
                 attack_fn = get_attack(training_hparams)
 
+                attack_power = training_hparams.adv_train_attack_power
+
                 if training_hparams.non_isotropic_adv_train:
-                    attack_power = training_hparams.adv_train_attack_power * 10
+                    attack_power *= 10
 
                 perturbation = attack_fn(
                     model,
@@ -219,19 +260,32 @@ def train(
                     training_hparams.adv_train_attack_iter,
                 )
                 # lets do some journalism to see if its faithful. and it works!
-                if (epoch % 2 == 0) and (iteration == 0):
-                    report_adv(model, examples, labels, perturbation)
+                # if (epoch % 2 == 0) and (iteration == 0):
+                #    report_adv(model, examples, labels, perturbation)
 
                 if training_hparams.non_isotropic_adv_train:
                     # project delta to be within epsilon sublevel set of the threat function
+                    if get_platform().is_primary_process and (
+                        epoch % 5 == 0 and iteration % 25 == 0
+                    ):
+                        print(
+                            "About to do nonisotropric adversarial training at epoch {}, iteration {}".format(
+                                epoch, iteration
+                            )
+                        )
                     perturbed_examples = non_isotropic_projection(
                         examples,
                         labels,
                         examples + perturbation,
                         greedy_subsets,
                         threshold=training_hparams.non_isotropic_training_threshold,
+                        verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                     )
                     perturbation = perturbed_examples - examples
+
+                perturbation = torch.min(
+                    torch.max(perturbation.detach(), -examples), 1 - examples
+                )  # clip examples+perturbation to [0,1]
 
                 examples = torch.cat((examples, examples + perturbation), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
@@ -248,9 +302,25 @@ def train(
 
             step_optimizer.zero_grad()
             model.train()
-            loss = model.loss_criterion(model(examples), labels)
-            loss.backward()
+            if examples.isnan().any() and get_platform().is_primary_process:
+                print(
+                    "Warning!!! Examples have NaN values after augmentation! at epoch {}, iteration {}".format(
+                        epoch, iteration
+                    )
+                )
+                return
 
+            loss = model.loss_criterion(model(examples), labels)
+            if loss.isnan().any() and get_platform().is_primary_process:
+                print(
+                    "Warning!!! Loss is NaN at epoch {}, iteration {}".format(
+                        epoch, iteration
+                    )
+                )
+                return
+
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
             # Step forward. Ignore warnings that the lr_schedule generates.
             step_optimizer.step()
             with warnings.catch_warnings():
