@@ -108,11 +108,14 @@ def load_greedy_subset(dataset_hparams):
     dataset_loc = os.path.join(
         get_platform().dataset_root, dataset_hparams.dataset_name
     )
+    input_shape = [dataset_hparams.num_channels] + [
+        dataset_hparams.num_spatial_dims
+    ] * 2
     per_label = dataset_hparams.greedy_per_label
     (first_half, second_half) = load_greedy_partition(
         per_label,
-        dataset_hparams.num_classes,
-        dataset_hparams.input_shape,
+        dataset_hparams.num_labels,
+        input_shape,
         dataset_loc=dataset_loc,
     )
     greedy_subsets = torch.cat((first_half, second_half), dim=1)

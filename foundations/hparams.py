@@ -158,6 +158,9 @@ class Hparams(abc.ABC):
 class DatasetHparams(Hparams):
     dataset_name: str
     batch_size: int
+    num_labels: int
+    num_channels: int
+    num_spatial_dims: int
     do_not_augment: bool = False
     transformation_seed: int = None
     subsample_fraction: float = None
@@ -168,14 +171,19 @@ class DatasetHparams(Hparams):
     gaussian_aug_mean: float = 0.0
     gaussian_aug_std: float = 1.0
     greedy_per_label: int = 50
-    non_isotropic_augment: bool = True
+    non_isotropic_augment: bool = False
     non_isotropic_projection_threshold: float = 0.4
-    non_isotropic_mixup: bool = True
+    non_isotropic_mixup: bool = False
 
     _name: str = "Dataset Hyperparameters"
     _description: str = "Hyperparameters that select the dataset, data augmentation, and other data transformations."
     _dataset_name: str = "The name of the dataset. Examples: mnist, cifar10"
     _batch_size: str = "The size of the mini-batches on which to train. Example: 64"
+    _num_labels: str = "The number of labels in the dataset. Example: 10"
+    _num_channels: str = "The number of channels in the dataset. Example: 3"
+    _num_spatial_dims: str = (
+        "The number of spatial dimensions in the dataset. Example: 32"
+    )
     _do_not_augment: str = (
         "If True, data augmentation is disabled. It is enabled by default."
     )
@@ -244,9 +252,9 @@ class TrainingHparams(Hparams):
     adv_train_attack_norm: str = "2"
     adv_train_attack_power: float = 1.5
     adv_train_attack_iter: int = 20
-    adv_train_start_epoch: int = 30
-    non_isotropic_adv: bool = True
-    non_isotropic_training_threshold: float = float("inf")
+    adv_train_start_epoch: int = 20
+    non_isotropic_adv_train: bool = False
+    non_isotropic_training_threshold: float = 0.3
 
     _name: str = "Training Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is trained."
@@ -277,8 +285,8 @@ class TrainingHparams(Hparams):
     )
     _adv_train_attack_iter: str = "Number of iterations of an iterative adversarial attack (ignored otherwise) almost always 20"
     _adv_train_start_epoch: str = "Epoch to start adversarial training"
-    _non_isotropic_adv: str = "Employ non-isotropic adversarial training"
-    _non_isotropic_training_threhsold: str = (
+    _non_isotropic_adv_train: str = "Employ non-isotropic adversarial training"
+    _non_isotropic_training_threshold: str = (
         "Threshold for non-isotropic adversarial training"
     )
 

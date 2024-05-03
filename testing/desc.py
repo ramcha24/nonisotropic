@@ -61,7 +61,7 @@ class TestingDesc(desc.Desc):
 
     @property
     def test_outputs(self):
-        return datasets_registry.num_classes(self.dataset_hparams)
+        return datasets_registry.num_labels(self.dataset_hparams)
 
     def train_checkpoint_path(self, replicate):
         base_hash = self.hashname(type_str='base')

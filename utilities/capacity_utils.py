@@ -73,12 +73,12 @@ def get_babel_mu(model):
 
 def get_reduced_classifier_constant(margin, permuted_fc_weight, col_activity_level, true_label):
     w = permuted_fc_weight
-    num_classes = w.shape[0]  # number of classes
-    w_diff = torch.zeros(num_classes)
+    num_labels = w.shape[0]  # number of classes
+    w_diff = torch.zeros(num_labels)
     activity_level = col_activity_level
     if margin < 1:
         activity_level = w.shape[1]
-    for j in range(num_classes):
+    for j in range(num_labels):
         w_diff[j] = torch.norm(w[true_label, 0:activity_level] - w[j, 0:activity_level])
 
     return torch.max(w_diff)
@@ -93,11 +93,11 @@ def get_classifier_constant(model, labels, npy=False):
     W_loss = 0.0
 
     # computing pairwise distances
-    num_classes = W.shape[0]  # number of classes
+    num_labels = W.shape[0]  # number of classes
 
-    PD = torch.zeros(num_classes, num_classes)
-    for i in range(num_classes):
-        for j in range(num_classes):
+    PD = torch.zeros(num_labels, num_labels)
+    for i in range(num_labels):
+        for j in range(num_labels):
             PD[i, j] = torch.norm(W[i, :] - W[j, :])
 
     W_norm = torch.norm(W)

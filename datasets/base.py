@@ -22,7 +22,7 @@ class Dataset(torch.utils.data.Dataset, abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def num_classes() -> int:
+    def num_labels() -> int:
         pass
 
     @staticmethod
@@ -60,7 +60,7 @@ class Dataset(torch.utils.data.Dataset, abc.ABC):
 
         num_to_randomize = np.ceil(len(self._labels) * fraction).astype(int)
         randomized_labels = np.random.RandomState(seed=seed).randint(
-            self.num_classes(), size=num_to_randomize
+            self.num_labels(), size=num_to_randomize
         )
         examples_to_randomize = np.random.RandomState(seed=seed + 1).permutation(
             len(self._labels)

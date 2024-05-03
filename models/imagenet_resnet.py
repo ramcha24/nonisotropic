@@ -9,7 +9,7 @@ from testing.desc import TestingDesc
 
 
 class ResNet(torchvision.models.ResNet):
-    def __init__(self, block, layers, num_classes=1000, width=64):
+    def __init__(self, block, layers, num_labels=1000, width=64):
         """To make it possible to vary the width, we need to override the constructor of the torchvision resnet."""
 
         torch.nn.Module.__init__(self)  # Skip the parent constructor. This replaces it.
@@ -41,7 +41,7 @@ class ResNet(torchvision.models.ResNet):
 
         # The last layers.
         self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = torch.nn.Linear(width * 8 * block.expansion, num_classes)
+        self.fc = torch.nn.Linear(width * 8 * block.expansion, num_labels)
 
         # Default init.
         for m in self.modules():
@@ -60,7 +60,7 @@ class Model(base.Model):
     def __init__(self, model_name, model_fn, initializer, outputs=None):
         super(Model, self).__init__()
         self.model_name = model_name
-        self.model = model_fn(num_classes=outputs or 1000)
+        self.model = model_fn(num_labels=outputs or 1000)
         self.criterion = torch.nn.CrossEntropyLoss()
         self.apply(initializer)
 
@@ -145,7 +145,10 @@ class Model(base.Model):
         )
 
         dataset_hparams = hparams.DatasetHparams(
-            dataset_name="imagenet", batch_size=256, num_classes=1000
+            dataset_name="imagenet",
+            batch_size=256,
+            num_labels=1000,
+            input_shape=(3, 224, 224),
         )
 
         training_hparams = hparams.TrainingHparams(

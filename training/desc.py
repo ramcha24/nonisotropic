@@ -77,7 +77,7 @@ class TrainingDesc(desc.Desc):
 
     @property
     def train_outputs(self):
-        return datasets_registry.num_classes(self.dataset_hparams)
+        return datasets_registry.num_labels(self.dataset_hparams)
 
     def run_path(self, replicate):
         base_hash = self.hashname(type_str="base")

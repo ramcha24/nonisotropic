@@ -16,7 +16,9 @@ def partial_threat_fn(
 ):
     assert (
         reference_inputs.shape[1] == anchor_points.shape[1]
-    ), "Reference and threat specification shapes do not match"
+    ), "Reference and threat specification shapes do not match got {} and {}".format(
+        reference_inputs.shape[1], anchor_points.shape[1]
+    )
 
     if all_pairs:
         assert len(anchor_labels) == len(anchor_points)
@@ -59,7 +61,9 @@ def non_isotropic_threat(
     greedy_subsets,
     all_pairs=False,
 ):
-    # ref_input : B x input_shape
+    # if get_platform().is_primary_process:
+    #     print("\nTrying to find non-isotropic threat")
+    # # ref_input : B x input_shape
     # Perturbations : B x input_shape
     # one perturbation for each reference input.
     # iterate through threat specification tensors for each threat_label
@@ -134,6 +138,7 @@ def non_isotropic_threat(
         threats = torch.maximum(
             partial_threat_fn(
                 reference_inputs,
+                reference_labels,
                 perturbed_inputs,
                 anchor_points,
                 anchor_labels,
@@ -141,7 +146,6 @@ def non_isotropic_threat(
             ),
             threats,
         )
-
     return threats
 
 
@@ -151,7 +155,7 @@ def non_isotropic_projection(
     perturbed_inputs,
     greedy_subsets,
     threshold=0.5,
-    num_iterations=5,
+    num_iterations=20,
 ):
     # ref_input : B x input_shape
     # Perturbations : B x input_shape
@@ -167,15 +171,21 @@ def non_isotropic_projection(
     perturbed_inputs = perturbed_inputs.to(device=get_platform().torch_device)
     perturbed_inputs = torch.flatten(perturbed_inputs, start_dim=1)
 
-    max_threat = non_isotropic_threat(
+    threats = non_isotropic_threat(
         reference_inputs, reference_labels, perturbed_inputs, None, greedy_subsets
-    ).max()
-    if max_threat <= threshold:
+    )
+    # artificial sanitizing
+    temp_max = torch.nan_to_num(threats, nan=-1).max()
+    threats = torch.nan_to_num(threats, nan=temp_max)
+    max_threat_bp = threats.max()
+    if max_threat_bp <= threshold:
         return torch.unflatten(perturbed_inputs, 1, input_shape)
 
     num_labels = greedy_subsets.shape[0]
 
-    current_perturbations = -(reference_inputs - perturbed_inputs).unsqueeze(1)
+    current_perturbations = -(reference_inputs - perturbed_inputs)
+    # if get_platform().is_primary_process:
+    #     print("\nCurrent perturbation shape is {}".format(current_perturbations.shape))
 
     for t in range(num_iterations):
         for threat_label in range(0, num_labels):
@@ -183,16 +193,30 @@ def non_isotropic_projection(
             anchor_points = greedy_subsets[threat_label].to(
                 device=get_platform().torch_device
             )
+            anchor_points = torch.flatten(anchor_points, start_dim=1)
 
-            (partial_threats, unsafe_directions, unsafe_norms, scaled_projections) = (
-                partial_threat_fn(
-                    reference_inputs,
-                    perturbed_inputs,
-                    anchor_points,
-                    [threat_label],
-                    return_all=True,
-                )
+            (
+                partial_threats,
+                unsafe_directions,
+                unsafe_norms,
+                scaled_projections,
+            ) = partial_threat_fn(
+                reference_inputs,
+                reference_labels,
+                perturbed_inputs,
+                anchor_points,
+                [threat_label],
+                return_all=True,
             )
+            partial_threats = torch.nan_to_num(partial_threats, nan=1.0)
+
+            # if get_platform().is_primary_process:
+            #     print(
+            #         "\nscaled_projections shape is {}".format(scaled_projections.shape)
+            #     )
+            #     print("\nunsafe_directions shape is {}".format(unsafe_directions.shape))
+            #     print("\nunsafe_norms shape is {}".format(unsafe_norms.shape))
+            #     print("\npartial_threats shape is {}".format(partial_threats.shape))
 
             max_selection = list(
                 enumerate(
@@ -200,9 +224,12 @@ def non_isotropic_projection(
                 )
             )
 
+            # if get_platform().is_primary_process:
+            #     print(unsafe_directions[max_selection[0][0]][max_selection[0][1]].shape)
+
             max_unsafe_directions = torch.stack(
                 [
-                    unsafe_directions[input_index][unsafe_index]
+                    unsafe_directions[input_index][unsafe_index].squeeze(0)
                     for (input_index, unsafe_index) in max_selection
                 ],
                 dim=0,
@@ -218,26 +245,41 @@ def non_isotropic_projection(
 
             residuals = partial_threats - threshold
             residuals[residuals < 0.0] = 0.0
+            # if get_platform().is_primary_process:
+            #     print("\nMax unsafe direction shape is {}".format(max_unsafe_directions.shape))
+            #     print("\nMax unsafe norms shape is {}".format(max_unsafe_norms.shape))
+            #     print("\nResiduals shape is {}".format(residuals.shape))
 
-            step_size = residuals * torch.sqrt(max_unsafe_norms)
+            step_size = residuals * torch.sqrt(max_unsafe_norms.squeeze(1))
+            # if get_platform().is_primary_process:
+            #     print("\nStep size shape is {}".format(step_size.shape))
 
             current_perturbations -= max_unsafe_directions * step_size[:, None]
 
     current_perturbations = current_perturbations.squeeze(1)
-    
-    max_threat = non_isotropic_threat(
+
+    threats = non_isotropic_threat(
         reference_inputs,
         reference_labels,
         reference_inputs + current_perturbations,
         None,
         greedy_subsets,
-    ).max()
+    )
+    temp_max = torch.nan_to_num(threats, nan=-1).max()
+    threats = torch.nan_to_num(threats, nan=temp_max)
+    max_threat_ap = threats.max()
+    # if get_platform().is_primary_process:
+    #     print(
+    #         "Max threat : Before projection was {} and after projection is {}".format(
+    #             max_threat_bp, max_threat_ap
+    #         )
+    #     )
 
     # undo flattening
     reference_inputs = torch.unflatten(reference_inputs, 1, input_shape)
     current_perturbations = torch.unflatten(current_perturbations, 1, input_shape)
 
-    if max_threat <= threshold:
+    if max_threat_ap <= threshold:
         return reference_inputs + current_perturbations
     else:
-        return reference_inputs + current_perturbations / max_threat
+        return reference_inputs + current_perturbations / max_threat_ap

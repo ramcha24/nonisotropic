@@ -105,6 +105,7 @@ def train(
         greedy_subsets = load_greedy_subset(dataset_hparams)
 
     # The training loop.
+    # print_count = 0
     for epoch in range(start_step.ep, end_step.ep + 1):
         # Ensure the data order is different for each epoch.
         train_loader.shuffle(
@@ -112,8 +113,8 @@ def train(
         )
 
         for iteration, (examples, labels) in enumerate(train_loader):
-            # if iteration % 500 == 0:
-            #    print("At epoch, iteration ({} {})".format(epoch, iteration))
+            if iteration % 100 <= 5 and get_platform().is_primary_process:
+                print("At epoch, iteration ({} {})".format(epoch, iteration))
 
             # Advance the data loader until the start epoch and iteration
             if epoch == start_step.ep and iteration < start_step.it:
@@ -132,23 +133,35 @@ def train(
             examples = examples.to(device=get_platform().torch_device)
             labels = labels.to(device=get_platform().torch_device)
             labels_size = torch.tensor(len(labels), device=get_platform().torch_device)
-            print("batch size initially is {}".format(labels_size))
+            # if print_count < 10 and get_platform().is_primary_process:
+            #     print(
+            #         "\n batch size in {} gpu initially is {}".format(
+            #             get_platform().local_rank, labels_size
+            #         )
+            #     )
+            #     print_count += 1
 
             if dataset_hparams.non_isotropic_mixup:
                 shuffle_indices = torch.randperm(len(labels))
-                perturbation = non_isotropic_projection(
+                perturbed_examples = non_isotropic_projection(
                     examples,
                     labels,
                     examples[shuffle_indices],
                     greedy_subsets,
                     threshold=dataset_hparams.non_isotropic_projection_threshold,
                 )
-                examples = torch.cat((examples, examples + perturbation), dim=0)
+                examples = torch.cat((examples, perturbed_examples), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
                 labels_size = torch.tensor(
                     len(labels), device=get_platform().torch_device
                 )
-                print("batch size after mixup augmentation is {}".format(labels_size))
+                # if print_count < 10 and get_platform().is_primary_process:
+                #     print(
+                #         "\n batch size in {} gpu after mixup augmentation is {}".format(
+                #             get_platform().local_rank, labels_size
+                #         )
+                #     )
+                #     print_count += 1
 
             if (
                 dataset_hparams.gaussian_augment
@@ -163,7 +176,7 @@ def train(
 
                 if dataset_hparams.non_isotropic_augment:
                     # project perturbation to be within epsilon sublevel set of the threat function
-                    perturbation = non_isotropic_projection(
+                    perturbed_examples = non_isotropic_projection(
                         examples,
                         labels,
                         perturbation,
@@ -171,43 +184,67 @@ def train(
                         threshold=dataset_hparams.non_isotropic_projection_threshold,
                     )
 
+                examples = torch.cat((examples, perturbed_examples), dim=0)
+                labels = torch.cat((labels, labels), dim=0)
+                labels_size = torch.tensor(
+                    len(labels), device=get_platform().torch_device
+                )
+                # if print_count < 10 and get_platform().is_primary_process:
+                #     print(
+                #         "\n batch size in {} gpu after Non-isotropic projection augmentation is {}".format(
+                #             get_platform().local_rank, labels_size
+                #         )
+                #     )
+                #     print_count += 1
+
+            if (
+                training_hparams.non_isotropic_adv_train or training_hparams.adv_train
+            ) and epoch >= training_hparams.adv_train_start_epoch:
+                if (
+                    epoch < training_hparams.adv_train_start_epoch + 6
+                    and get_platform().is_primary_process
+                ):
+                    print("Starting adversarial training at epoch {}".format(epoch))
+                attack_fn = get_attack(training_hparams)
+
+                if training_hparams.non_isotropic_adv_train:
+                    attack_power = training_hparams.adv_train_attack_power * 10
+
+                perturbation = attack_fn(
+                    model,
+                    examples,
+                    labels,
+                    attack_power,
+                    attack_power / 10,
+                    training_hparams.adv_train_attack_iter,
+                )
+                # lets do some journalism to see if its faithful. and it works!
+                if (epoch % 2 == 0) and (iteration == 0):
+                    report_adv(model, examples, labels, perturbation)
+
+                if training_hparams.non_isotropic_adv_train:
+                    # project delta to be within epsilon sublevel set of the threat function
+                    perturbed_examples = non_isotropic_projection(
+                        examples,
+                        labels,
+                        examples + perturbation,
+                        greedy_subsets,
+                        threshold=training_hparams.non_isotropic_training_threshold,
+                    )
+                    perturbation = perturbed_examples - examples
+
                 examples = torch.cat((examples, examples + perturbation), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
                 labels_size = torch.tensor(
                     len(labels), device=get_platform().torch_device
                 )
-                print(
-                    "batch size after Gaussian/Non-isotropic projection augmentation is {}".format(
-                        labels_size
-                    )
-                )
-
-            if (
-                training_hparams.adv_train
-                and epoch >= training_hparams.adv_train_start_epoch
-            ):
-                attack_fn = get_attack(training_hparams)
-
-                delta = attack_fn(
-                    model,
-                    examples,
-                    labels,
-                    training_hparams.adv_train_attack_power,
-                    training_hparams.adv_train_attack_power / 10,
-                    training_hparams.adv_train_attack_iter,
-                )
-                # lets do some journalism to see if its faithful. and it works!
-                if (epoch % 2 == 0) and (iteration == 0):
-                    report_adv(model, examples, labels, delta)
-
-                if training_hparams.nonisotropic_adv:
-                    # project delta to be within epsilon sublevel set of the threat function
-                    continue
-
-                examples = torch.cat((examples, examples + delta), dim=0)
-                labels = torch.cat((labels, labels), dim=0)
-                # labels_size = torch.tensor(len(labels), device=get_platform().torch_device)
-                # print('batch size after adversarial training is {}'.format(labels_size))
+                # if print_count < 10 and get_platform().is_primary_process:
+                #     print(
+                #         "\n batch size in {} gpu after adversarial training is {}".format(
+                #             get_platform().local_rank, labels_size
+                #         )
+                #     )
+                #     print_count += 1
 
             step_optimizer.zero_grad()
             model.train()

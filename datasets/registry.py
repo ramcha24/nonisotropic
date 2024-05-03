@@ -78,11 +78,13 @@ def iterations_per_epoch(dataset_hparams: DatasetHparams):
     return np.ceil(num_train_examples / dataset_hparams.batch_size).astype(int)
 
 
-def num_classes(dataset_hparams: DatasetHparams):
+def num_labels(dataset_hparams: DatasetHparams):
     """Get the number of classes."""
 
     if dataset_hparams.dataset_name in registered_datasets:
-        num = registered_datasets[dataset_hparams.dataset_name].Dataset.num_classes()
+        num_labels = registered_datasets[
+            dataset_hparams.dataset_name
+        ].Dataset.num_labels()
     else:
         raise ValueError("No such dataset: {}".format(dataset_hparams.dataset_name))
 
@@ -96,4 +98,4 @@ def num_classes(dataset_hparams: DatasetHparams):
         else:
             return 4
 
-    return num
+    return num_labels

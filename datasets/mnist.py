@@ -24,7 +24,7 @@ class Dataset(base.ImageDataset):
         return 10000
 
     @staticmethod
-    def num_classes():
+    def num_labels():
         return 10
 
     @staticmethod

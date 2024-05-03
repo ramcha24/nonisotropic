@@ -56,11 +56,9 @@ def main():
 
     args = parser.parse_args()
     platform = platforms.registry.get(platform_name).create_from_args(args)
-    print("platform rank is")
-    print(platform.local_rank)
-    print(platform.torch_device)
-    print("platform global rank is")
-    print(platform.global_rank)
+    # print("platform rank is")
+    # print(platform.local_rank)
+    # print(platform.torch_device)
 
     if args.display_output_location:
         platform.run_job(

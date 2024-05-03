@@ -134,7 +134,10 @@ class Model(base.Model):
         )
 
         dataset_hparams = hparams.DatasetHparams(
-            dataset_name="cifar10", batch_size=128, num_classes=10
+            dataset_name="cifar10",
+            batch_size=128,
+            num_labels=10,
+            input_shape=(3, 32, 32),
         )
 
         training_hparams = hparams.TrainingHparams(

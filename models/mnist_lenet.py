@@ -39,13 +39,15 @@ class Model(base.Model):
 
     @property
     def output_layer_names(self):
-        return ['fc.weight', 'fc.bias']
-    
+        return ["fc.weight", "fc.bias"]
+
     @staticmethod
     def is_valid_model_name(model_name):
-        return (model_name.startswith('mnist_lenet') and
-                len(model_name.split('_')) > 2 and
-                all([x.isdigit() and int(x) > 0 for x in model_name.split('_')[2:]]))
+        return (
+            model_name.startswith("mnist_lenet")
+            and len(model_name.split("_")) > 2
+            and all([x.isdigit() and int(x) > 0 for x in model_name.split("_")[2:]])
+        )
 
     @staticmethod
     def get_model_from_name(model_name, initializer, outputs=None):
@@ -57,11 +59,11 @@ class Model(base.Model):
         """
 
         outputs = outputs or 10
-        
-        if not Model.is_valid_model_name(model_name):
-            raise ValueError('Invalid model name: {}'.format(model_name))
 
-        plan = [int(n) for n in model_name.split('_')[2:]]
+        if not Model.is_valid_model_name(model_name):
+            raise ValueError("Invalid model name: {}".format(model_name))
+
+        plan = [int(n) for n in model_name.split("_")[2:]]
         return Model(model_name, plan, initializer, outputs)
 
     @property
@@ -71,30 +73,33 @@ class Model(base.Model):
     @staticmethod
     def default_hparams(runner_name):
         model_hparams = hparams.ModelHparams(
-            model_name='mnist_lenet_300_100',
-            model_init='kaiming_normal',
-            batchnorm_init='uniform'
+            model_name="mnist_lenet_300_100",
+            model_init="kaiming_normal",
+            batchnorm_init="uniform",
         )
 
         dataset_hparams = hparams.DatasetHparams(
-            dataset_name='mnist',
+            dataset_name="mnist",
             batch_size=128,
-            num_classes=10
+            num_labels=10,
+            input_shape=(1, 28, 28),
         )
 
         training_hparams = hparams.TrainingHparams(
-            optimizer_name='sgd',
-            lr=0.1,
-            training_steps='40ep'
+            optimizer_name="sgd", lr=0.1, training_steps="40ep"
         )
 
-        testing_hparams = hparams.TestingHparams(
-        )
+        testing_hparams = hparams.TestingHparams()
 
-        if runner_name == 'train':
+        if runner_name == "train":
             return TrainingDesc(model_hparams, dataset_hparams, training_hparams)
-        elif runner_name == 'test':
-            return TestingDesc(model_hparams, dataset_hparams, training_hparams, testing_hparams)
+        elif runner_name == "test":
+            return TestingDesc(
+                model_hparams, dataset_hparams, training_hparams, testing_hparams
+            )
         else:
-            raise ValueError("Cannot supply default hparams for an invalid runner - {}".format(runner_name))
-
+            raise ValueError(
+                "Cannot supply default hparams for an invalid runner - {}".format(
+                    runner_name
+                )
+            )
