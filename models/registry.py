@@ -1,15 +1,15 @@
 from foundations import paths
 from foundations.hparams import ModelHparams
 from foundations.step import Step
-from models import mnist_lenet, mnist_conv, cifar_resnet, cifar_vgg, imagenet_resnet
+from models import cifar10_resnet, mnist_lenet, mnist_conv, cifar10_vgg, imagenet_resnet
 from models import bn_initializers, initializers
 from platforms.platform import get_platform
 
 registered_models = [
     mnist_lenet.Model,
     mnist_conv.Model,
-    cifar_resnet.Model,
-    cifar_vgg.Model,
+    cifar10_resnet.Model,
+    cifar10_vgg.Model,
     imagenet_resnet.Model,
 ]
 

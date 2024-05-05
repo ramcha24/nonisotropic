@@ -84,7 +84,7 @@ class Model(base.Model):
     @staticmethod
     def is_valid_model_name(model_name):
         return (
-            model_name.startswith("cifar_resnet_")
+            model_name.startswith("cifar10_resnet_")
             and 5 > len(model_name.split("_")) > 2
             and all([x.isdigit() and int(x) > 0 for x in model_name.split("_")[2:]])
             and (int(model_name.split("_")[2]) - 2) % 6 == 0
@@ -131,7 +131,7 @@ class Model(base.Model):
     @staticmethod
     def default_hparams(runner_name):
         model_hparams = hparams.ModelHparams(
-            model_name="cifar_resnet_20",
+            model_name="cifar10_resnet_20",
             model_init="kaiming_normal",
             batchnorm_init="uniform",
         )

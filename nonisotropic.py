@@ -15,6 +15,7 @@ def main():
         + "\n Non-isotropic Robustness : Measuring adversarial robustness against non-isotropic threat specifications\n"
         + "-" * 100
     )
+    # TO DO.. configure to run multiple jobs in serial/parallel. Or perhaps use hydra.
 
     # choose an initial command
     helptext = welcome + "\n Choose a command to run:"
@@ -56,9 +57,6 @@ def main():
 
     args = parser.parse_args()
     platform = platforms.registry.get(platform_name).create_from_args(args)
-    # print("platform rank is")
-    # print(platform.local_rank)
-    # print(platform.torch_device)
 
     if args.display_output_location:
         platform.run_job(

@@ -43,6 +43,7 @@ class Platform(Hparams):
         return torch.cuda.is_available() and torch.cuda.device_count() > 1
 
     @property
+    # @abc.abstractmethod
     def is_distributed(self):
         return True
 

@@ -21,32 +21,32 @@ class TrainingDesc(desc.Desc):
 
     @staticmethod
     def name_prefix():
-        return "train"
+        return "training"
 
-    # @staticmethod
-    def hashname(self, type_str) -> str:
-        fields_dict = {f.name: getattr(self, f.name) for f in fields(self)}
-        if type_str == "base":
-            hparams_strs = [
-                str(fields_dict[k])
-                for k in sorted(fields_dict)
-                if (
-                    isinstance(fields_dict[k], hparams.DatasetHparams)
-                    or isinstance(fields_dict[k], hparams.ModelHparams)
-                )
-            ]
-            hash_str = hashlib.md5(";".join(hparams_strs).encode("utf-8")).hexdigest()
-            return f"base_{hash_str}"
-        elif type_str == "train":
-            hparams_strs = [
-                str(fields_dict[k])
-                for k in sorted(fields_dict)
-                if isinstance(fields_dict[k], hparams.TrainingHparams)
-            ]
-            hash_str = hashlib.md5(";".join(hparams_strs).encode("utf-8")).hexdigest()
-            return f"train_{hash_str}"
-        else:
-            raise ValueError("Invalid type string of hparam : {}".format(type_str))
+    # # @staticmethod
+    # def hashname(self, type_str) -> str:
+    #     fields_dict = {f.name: getattr(self, f.name) for f in fields(self)}
+    #     if type_str == "base":
+    #         hparams_strs = [
+    #             str(fields_dict[k])
+    #             for k in sorted(fields_dict)
+    #             if (
+    #                 isinstance(fields_dict[k], hparams.DatasetHparams)
+    #                 or isinstance(fields_dict[k], hparams.ModelHparams)
+    #             )
+    #         ]
+    #         hash_str = hashlib.md5(";".join(hparams_strs).encode("utf-8")).hexdigest()
+    #         return f"base_{hash_str}"
+    #     elif type_str == "train":
+    #         hparams_strs = [
+    #             str(fields_dict[k])
+    #             for k in sorted(fields_dict)
+    #             if isinstance(fields_dict[k], hparams.TrainingHparams)
+    #         ]
+    #         hash_str = hashlib.md5(";".join(hparams_strs).encode("utf-8")).hexdigest()
+    #         return f"train_{hash_str}"
+    #     else:
+    #         raise ValueError("Invalid type string of hparam : {}".format(type_str))
 
     @staticmethod
     def add_args(parser: argparse.ArgumentParser, defaults: "TrainingDesc" = None):
@@ -80,10 +80,55 @@ class TrainingDesc(desc.Desc):
         return datasets_registry.num_labels(self.dataset_hparams)
 
     def run_path(self, replicate):
-        base_hash = self.hashname(type_str="base")
+        dataset_hash = self.hashname(type_str="dataset")
+        model_hash = self.hashname(type_str="model")
         train_hash = self.hashname(type_str="train")
+        dataset_str = self.get_dataset_name()
+        model_str = self.get_model_name()
+        root_location = get_platform().root
+        if model_str.startswith("RB"):
+            runner_str = "finetuning"
+        else:
+            runner_str = self.name_prefix()
+
+        dataset_prefix = "data_"
+        if not (
+            self.dataset_hparams.gaussian_augment
+            or self.dataset_hparams.non_isotropic_augment
+            or self.dataset_hparams.non_isotropic_mixup
+        ):
+            dataset_prefix += "std_"
+        else:
+            if self.dataset_hparams.gaussian_augment:
+                dataset_prefix += "gaussian_"
+            if self.dataset_hparams.non_isotropic_augment:
+                dataset_prefix += "Nproject_"
+            if self.dataset_hparams.non_isotropic_mixup:
+                dataset_prefix += "Nmixup_"
+
+        model_prefix = "model_"
+
+        train_prefix = "train_"
+        if not (
+            self.training_hparams.adv_train
+            or self.training_hparams.non_isotropic_adv_train
+        ):
+            train_prefix += "std_"
+        else:
+            if self.training_hparams.adv_train:
+                train_prefix += "adv_"
+            if self.training_hparams.non_isotropic_adv_train:
+                train_prefix += "Nadv_"
+
         return os.path.join(
-            get_platform().root, base_hash, train_hash, f"replicate_{replicate}"
+            root_location,
+            dataset_str,
+            model_str,
+            runner_str,
+            dataset_prefix + dataset_hash,
+            model_prefix + model_hash,
+            train_prefix + train_hash,
+            f"replicate_{replicate}",
         )
 
     @property
