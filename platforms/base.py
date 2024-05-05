@@ -32,32 +32,50 @@ class Platform(Hparams):
             return "cpu"
 
     @property
+    @abc.abstractmethod
     def torch_device(self):
-        return torch.device(int(os.environ["LOCAL_RANK"]))
+        """
+        The torch device to use for computation.
+        """
+        pass
+        # return torch.device(int(os.environ["LOCAL_RANK"]))
 
     # torch.cuda.current_device()
 
     @property
     def is_parallel(self):
-        # currently this is always false
+        """
+        Should Pytorch use DataParallel computation.
+        """
+
         return torch.cuda.is_available() and torch.cuda.device_count() > 1
 
     @property
-    # @abc.abstractmethod
+    @abc.abstractmethod
     def is_distributed(self):
-        return True
+        """
+        Should Pytorch use DistributedDataParallel computation.
+        """
+
+        pass
 
     @property
+    @abc.abstractmethod
     def local_rank(self):
-        return int(os.environ["LOCAL_RANK"])
+        """
+        Local rank of the process.
+        """
+        pass  # return 0 # int(os.environ["LOCAL_RANK"])
 
     @property
-    def global_rank(self):
-        return int(os.environ["RANK"])
-
-    @property
+    @abc.abstractmethod
     def is_primary_process(self):
-        return not self.is_distributed or (self.local_rank == 0)
+        """
+        Is the process with rank 0?
+        """
+        pass
+
+    # return not self.is_distributed or (self.local_rank == 0)
 
     def barrier(self):
         pass

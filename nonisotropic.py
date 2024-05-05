@@ -1,5 +1,6 @@
 import argparse
 import sys
+import os
 
 from cli import runner_registry
 from cli import arg_utils
@@ -44,8 +45,22 @@ def main():
         help="Display the output location for this job.",
     )
 
-    # get the platform arguments
-    platform_name = arg_utils.maybe_get_arg("platform") or "local"
+    rank_flag = "LOCAL_RANK" in os.environ
+    default_platform_name = "local" if not rank_flag else "distributed"
+
+    platform_name = arg_utils.maybe_get_arg("platform") or default_platform_name
+
+    if platform_name == "distributed" and not rank_flag:
+        print(
+            "\nLocal rank environment variable has not been set, For a distributed job, try 'torchrun --nproc_per_node=2 nonisotropic.py ...'\n"
+        )
+        sys.exit(1)
+    if platform_name == "local" and rank_flag:
+        print(
+            "\nLocal rank environment variable indicates a distributed job but the chosen platform is local. Try setting --platform distributed or ignore --platform argument when running with torchrun launcher\n"
+        )
+        sys.exit(1)
+
     if platform_name and platform_name in platforms.registry.registered_platforms:
         platforms.registry.get(platform_name).add_args(parser)
     else:
