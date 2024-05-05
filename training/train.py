@@ -72,8 +72,8 @@ def train(
     if get_platform().is_distributed:
         model = DistributedDataParallel(model, device_ids=[get_platform().local_rank])
         print("In distributed!, rank id is " + str(get_platform().local_rank))
-    elif get_platform().is_parallel:
-        model = DataParallel(model)
+    # elif get_platform().is_parallel:
+    #    model = DataParallel(model)
 
     eta = 0.1  # regularization constant for orthogonal layer weights
     # Get the random seed for the data order.
@@ -98,9 +98,9 @@ def train(
         return
 
     if (
-        dataset_hparams.non_isotropic_augment
-        or dataset_hparams.non_isotropic_mixup
-        or (training_hparams.adv_train and training_hparams.non_isotropic_adv)
+        dataset_hparams.N_project
+        or dataset_hparams.N_mixup
+        or (training_hparams.adv_train and training_hparams.N_ad_train)
     ):
         greedy_subsets = load_greedy_subset(dataset_hparams)
 
@@ -115,10 +115,10 @@ def train(
         for iteration, (examples, labels) in enumerate(train_loader):
             if (
                 epoch % 5 == 0
-                and iteration % 25 == 0
+                and iteration % 50 == 0
                 and get_platform().is_primary_process
             ):
-                print("At epoch, iteration ({} {})".format(epoch, iteration))
+                print("\n At epoch, iteration ({} {})".format(epoch, iteration))
 
             # Advance the data loader until the start epoch and iteration
             if epoch == start_step.ep and iteration < start_step.it:
@@ -152,15 +152,15 @@ def train(
                 )
                 return
 
-            if dataset_hparams.non_isotropic_mixup:
-                if get_platform().is_primary_process and (
-                    epoch % 5 == 0 and iteration % 25 == 0
-                ):
-                    print(
-                        "About to do mixup augmentation at epoch {}, iteration {}".format(
-                            epoch, iteration
-                        )
-                    )
+            if dataset_hparams.N_mixup:
+                # if get_platform().is_primary_process and (
+                #     epoch % 5 == 0 and iteration % 25 == 0
+                # ):
+                #     print(
+                #         "\n About to do Nmixup at epoch {}, iteration {}".format(
+                #             epoch, iteration
+                #         )
+                #     )
 
                 shuffle_indices = torch.randperm(len(labels))
                 perturbed_examples = non_isotropic_projection(
@@ -168,8 +168,8 @@ def train(
                     labels,
                     examples[shuffle_indices],
                     greedy_subsets,
-                    threshold=dataset_hparams.non_isotropic_projection_threshold,
-                    verbose=(epoch % 5 == 0 and iteration % 25 == 0),
+                    threshold=dataset_hparams.N_threshold,
+                    # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                 )
                 examples = torch.cat((examples, perturbed_examples), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
@@ -184,10 +184,7 @@ def train(
                 #     )
                 #     print_count += 1
 
-            if (
-                dataset_hparams.gaussian_augment
-                or dataset_hparams.non_isotropic_augment
-            ):
+            if dataset_hparams.gaussian_augment or dataset_hparams.N_project:
                 perturbation = torch.zeros_like(examples).to(
                     device=get_platform().torch_device
                 )
@@ -196,23 +193,23 @@ def train(
                     10 * dataset_hparams.gaussian_aug_std,
                 )
 
-                if dataset_hparams.non_isotropic_augment:
-                    if get_platform().is_primary_process and (
-                        epoch % 5 == 0 and iteration % 25 == 0
-                    ):
-                        print(
-                            "About to do projecion augmentation at epoch {}, iteration {}".format(
-                                epoch, iteration
-                            )
-                        )
+                if dataset_hparams.N_project:
+                    # if get_platform().is_primary_process and (
+                    #     epoch % 5 == 0 and iteration % 25 == 0
+                    # ):
+                    #     print(
+                    #         "\n About to do Nproject at epoch {}, iteration {}".format(
+                    #             epoch, iteration
+                    #         )
+                    #     )
                     # project perturbation to be within epsilon sublevel set of the threat function
                     perturbed_examples = non_isotropic_projection(
                         examples,
                         labels,
                         perturbation,
                         greedy_subsets,
-                        threshold=dataset_hparams.non_isotropic_projection_threshold,
-                        verbose=(epoch % 5 == 0 and iteration % 25 == 0),
+                        threshold=dataset_hparams.N_threshold,
+                        # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                     )
                     perturbation = perturbed_examples - examples
 
@@ -233,22 +230,14 @@ def train(
                     )
                     return
 
-                # if print_count < 10 and get_platform().is_primary_process:
-                #     print(
-                #         "\n batch size in {} gpu after Non-isotropic projection augmentation is {}".format(
-                #             get_platform().local_rank, labels_size
-                #         )
-                #     )
-                #     print_count += 1
-
             if (
-                training_hparams.non_isotropic_adv_train or training_hparams.adv_train
+                training_hparams.N_adv_train or training_hparams.adv_train
             ) and epoch >= training_hparams.adv_train_start_epoch:
                 attack_fn = get_attack(training_hparams)
 
                 attack_power = training_hparams.adv_train_attack_power
 
-                if training_hparams.non_isotropic_adv_train:
+                if training_hparams.N_adv_train:
                     attack_power *= 10
 
                 perturbation = attack_fn(
@@ -263,23 +252,23 @@ def train(
                 # if (epoch % 2 == 0) and (iteration == 0):
                 #    report_adv(model, examples, labels, perturbation)
 
-                if training_hparams.non_isotropic_adv_train:
+                if training_hparams.N_adv_train:
                     # project delta to be within epsilon sublevel set of the threat function
-                    if get_platform().is_primary_process and (
-                        epoch % 5 == 0 and iteration % 25 == 0
-                    ):
-                        print(
-                            "About to do nonisotropric adversarial training at epoch {}, iteration {}".format(
-                                epoch, iteration
-                            )
-                        )
+                    # if get_platform().is_primary_process and (
+                    #     epoch % 5 == 0 and iteration % 25 == 0
+                    # ):
+                    #     print(
+                    #         "\n About to do nonisotropic adversarial training at epoch {}, iteration {}".format(
+                    #             epoch, iteration
+                    #         )
+                    #     )
                     perturbed_examples = non_isotropic_projection(
                         examples,
                         labels,
                         examples + perturbation,
                         greedy_subsets,
                         threshold=training_hparams.non_isotropic_training_threshold,
-                        verbose=(epoch % 5 == 0 and iteration % 25 == 0),
+                        # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                     )
                     perturbation = perturbed_examples - examples
 
@@ -320,7 +309,8 @@ def train(
                 return
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+
             # Step forward. Ignore warnings that the lr_schedule generates.
             step_optimizer.step()
             with warnings.catch_warnings():
@@ -356,10 +346,6 @@ def standard_train(
 
     train_loader = datasets.registry.get(dataset_hparams, train=True)
     test_loader = datasets.registry.get(dataset_hparams, train=False)
-
-    if get_platform().is_primary_process:
-        print("Model name is : " + str(model.model_name))
-        print("Dataset name is : " + str(dataset_hparams.dataset_name))
 
     callbacks = standard_callbacks.standard_callbacks(
         training_hparams,

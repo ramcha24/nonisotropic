@@ -23,31 +23,6 @@ class TrainingDesc(desc.Desc):
     def name_prefix():
         return "training"
 
-    # # @staticmethod
-    # def hashname(self, type_str) -> str:
-    #     fields_dict = {f.name: getattr(self, f.name) for f in fields(self)}
-    #     if type_str == "base":
-    #         hparams_strs = [
-    #             str(fields_dict[k])
-    #             for k in sorted(fields_dict)
-    #             if (
-    #                 isinstance(fields_dict[k], hparams.DatasetHparams)
-    #                 or isinstance(fields_dict[k], hparams.ModelHparams)
-    #             )
-    #         ]
-    #         hash_str = hashlib.md5(";".join(hparams_strs).encode("utf-8")).hexdigest()
-    #         return f"base_{hash_str}"
-    #     elif type_str == "train":
-    #         hparams_strs = [
-    #             str(fields_dict[k])
-    #             for k in sorted(fields_dict)
-    #             if isinstance(fields_dict[k], hparams.TrainingHparams)
-    #         ]
-    #         hash_str = hashlib.md5(";".join(hparams_strs).encode("utf-8")).hexdigest()
-    #         return f"train_{hash_str}"
-    #     else:
-    #         raise ValueError("Invalid type string of hparam : {}".format(type_str))
-
     @staticmethod
     def add_args(parser: argparse.ArgumentParser, defaults: "TrainingDesc" = None):
         hparams.DatasetHparams.add_args(
@@ -79,13 +54,11 @@ class TrainingDesc(desc.Desc):
     def train_outputs(self):
         return datasets_registry.num_labels(self.dataset_hparams)
 
-    def run_path(self, replicate):
-        dataset_hash = self.hashname(type_str="dataset")
-        model_hash = self.hashname(type_str="model")
-        train_hash = self.hashname(type_str="train")
+    def run_path(self, replicate, verbose=False):
+        root_location = get_platform().root
+
         dataset_str = self.get_dataset_name()
         model_str = self.get_model_name()
-        root_location = get_platform().root
         if model_str.startswith("RB"):
             runner_str = "finetuning"
         else:
@@ -94,42 +67,67 @@ class TrainingDesc(desc.Desc):
         dataset_prefix = "data_"
         if not (
             self.dataset_hparams.gaussian_augment
-            or self.dataset_hparams.non_isotropic_augment
-            or self.dataset_hparams.non_isotropic_mixup
+            or self.dataset_hparams.N_project
+            or self.dataset_hparams.N_mixup
         ):
             dataset_prefix += "std_"
         else:
             if self.dataset_hparams.gaussian_augment:
                 dataset_prefix += "gaussian_"
-            if self.dataset_hparams.non_isotropic_augment:
+            if self.dataset_hparams.N_project:
                 dataset_prefix += "Nproject_"
-            if self.dataset_hparams.non_isotropic_mixup:
+            if self.dataset_hparams.N_mixup:
                 dataset_prefix += "Nmixup_"
+        dataset_hash = self.hashname(type_str="data")
 
         model_prefix = "model_"
+        model_hash = self.hashname(type_str="model")
 
         train_prefix = "train_"
-        if not (
-            self.training_hparams.adv_train
-            or self.training_hparams.non_isotropic_adv_train
-        ):
+        if not (self.training_hparams.adv_train or self.training_hparams.N_adv_train):
             train_prefix += "std_"
         else:
             if self.training_hparams.adv_train:
                 train_prefix += "adv_"
-            if self.training_hparams.non_isotropic_adv_train:
+            if self.training_hparams.N_adv_train:
                 train_prefix += "Nadv_"
+        train_hash = self.hashname(type_str="train")
 
-        return os.path.join(
+        replicate_str = f"replicate_{replicate}"
+
+        logger_paths = dict()
+        logger_paths["data"] = os.path.join(
             root_location,
             dataset_str,
             model_str,
             runner_str,
             dataset_prefix + dataset_hash,
-            model_prefix + model_hash,
-            train_prefix + train_hash,
-            f"replicate_{replicate}",
         )
+
+        logger_paths["model"] = os.path.join(
+            logger_paths["data"], model_prefix + model_hash
+        )
+
+        logger_paths["train"] = os.path.join(
+            logger_paths["model"], train_prefix + train_hash
+        )
+
+        full_run_path = os.path.join(
+            logger_paths["train"],
+            replicate_str,
+        )
+
+        if get_platform().is_primary_process and verbose:
+            print("\nDataset hparams will be logged at {}".format(logger_paths["data"]))
+            print("\nModel hparams will be logged at {}".format(logger_paths["model"]))
+            print(
+                "\nTraining hparams will be logged at {}".format(logger_paths["train"])
+            )
+
+        if not get_platform().exists(full_run_path) and verbose:
+            print("\nA job with this configuration has not been run yet.")
+
+        return full_run_path, logger_paths
 
     @property
     def display(self):
@@ -141,46 +139,21 @@ class TrainingDesc(desc.Desc):
             ]
         )
 
-    def save_param(self, replicate, type_str):
-        if type_str != "base" and type_str != "train":
-            raise ValueError("Invalid parameter string {}".format(type_str))
+    def save_param(self, replicate):
 
-        base_hash = self.hashname(type_str="base")
-        train_hash = self.hashname(type_str="train")
-
-        base_output_location = os.path.join(get_platform().root, base_hash)
-        train_output_location = os.path.join(
-            base_output_location, train_hash, f"replicate_{replicate}"
-        )
+        full_run_path, logger_paths = self.run_path(replicate)
 
         if not get_platform().is_primary_process:
             return
-        if not get_platform().exists(base_output_location):
-            get_platform().makedirs(base_output_location)
-        if type_str == "train" and not get_platform().exists(train_output_location):
-            get_platform().makedirs(train_output_location)
-
-        fields_dict = {f.name: getattr(self, f.name) for f in fields(self)}
-        if type_str == "base":
-            hparams_strs = [
-                fields_dict[k].display
-                for k in sorted(fields_dict)
-                if (
-                    isinstance(fields_dict[k], hparams.DatasetHparams)
-                    or isinstance(fields_dict[k], hparams.ModelHparams)
-                )
-            ]
-            with get_platform().open(
-                paths.params_loc(base_output_location, type_str), "w"
-            ) as fp:
-                fp.write("\n".join(hparams_strs))
+        if not get_platform().exists(full_run_path):
+            get_platform().makedirs(full_run_path)
+            for type_str in ["data", "model", "train"]:
+                hparams_strs = self.get_hparams_str(type_str=type_str)
+                with get_platform().open(
+                    paths.params_loc(logger_paths[type_str], type_str), "w"
+                ) as fp:
+                    fp.write("\n".join(hparams_strs))
         else:
-            hparams_strs = [
-                fields_dict[k].display
-                for k in sorted(fields_dict)
-                if isinstance(fields_dict[k], hparams.TrainingHparams)
-            ]
-            with get_platform().open(
-                paths.params_loc(train_output_location, type_str), "w"
-            ) as fp:
-                fp.write("\n".join(hparams_strs))
+            print(
+                "A job with this configuration may have already been initiated."  # Stale. Delete the existing job results to run again.
+            )

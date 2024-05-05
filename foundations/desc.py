@@ -54,10 +54,10 @@ class Desc(abc.ABC):
                 model_name += str(item)
             return model_name
 
-    def hashname(self, type_str) -> str:
+    def get_hparams_str(self, type_str):
         hparams_strs = None
 
-        if type_str == "dataset":
+        if type_str == "data":
             hparams_strs = self.class_select(hparams.DatasetHparams)
         elif type_str == "model":
             hparams_strs = self.class_select(hparams.ModelHparams)
@@ -69,6 +69,11 @@ class Desc(abc.ABC):
             raise ValueError("Invalid subclass type of Hparams : {}".format(type_str))
 
         assert hparams_strs is not None
+        return hparams_strs
+
+    def hashname(self, type_str) -> str:
+        hparams_strs = self.get_hparams_str(type_str=type_str)
+
         hash_str = hashlib.md5(";".join(hparams_strs).encode("utf-8")).hexdigest()[
             :6
         ]  # shortening hash for ease, trade-off with collision factor.

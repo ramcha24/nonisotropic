@@ -37,9 +37,12 @@ class TrainingRunner(Runner):
         )
 
     def display_output_location(self):
-        print(self.desc.run_path(self.replicate))
+        full_run_path, _ = self.desc.run_path(self.replicate, verbose=self.verbose)
+        print("\n Output Location : " + full_run_path)
 
     def run(self):
+        full_run_path, _ = self.desc.run_path(self.replicate)
+
         if self.verbose and get_platform().is_primary_process:
             print(
                 "=" * 82
@@ -47,20 +50,13 @@ class TrainingRunner(Runner):
                 + "-" * 82
             )
             print(self.desc.display)
-            print(
-                f"Output Location: {self.desc.run_path(self.replicate)}"
-                + "\n"
-                + "-" * 82
-                + "\n"
-            )
+            print(f"Output Location: {full_run_path}" + "\n" + "-" * 82 + "\n")
 
-        self.desc.save_param(self.replicate, "base")
-        self.desc.save_param(self.replicate, "train")
-        # self.desc.save(self.desc.run_path(self.replicate))
+        self.desc.save_param(self.replicate)
 
         train.standard_train(
             models.registry.get(self.desc.model_hparams),
-            self.desc.run_path(self.replicate),
+            full_run_path,
             self.desc.dataset_hparams,
             self.desc.training_hparams,
             evaluate_every_epoch=self.evaluate_every_epoch,

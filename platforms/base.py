@@ -2,6 +2,7 @@ import abc
 from dataclasses import dataclass
 import os
 import torch
+from pathlib import Path
 
 from foundations.hparams import Hparams
 import platforms.platform
@@ -48,7 +49,7 @@ class Platform(Hparams):
         Should Pytorch use DataParallel computation.
         """
 
-        return torch.cuda.is_available() and torch.cuda.device_count() > 1
+        return False  # torch.cuda.is_available() and torch.cuda.device_count() > 1
 
     @property
     @abc.abstractmethod
@@ -107,16 +108,18 @@ class Platform(Hparams):
         return open(file, mode)
 
     @staticmethod
-    def exists(file):
-        return os.path.exists(file)
+    def exists(path):
+        return Path(path).exists()  # os.path.exists(file)
 
     @staticmethod
     def makedirs(path):
-        return os.makedirs(path)
+        return Path(path).mkdir(
+            parents=True, exist_ok=True
+        )  # return os.makedirs(path, exist_ok=True)
 
     @staticmethod
     def isdir(path):
-        return os.path.isdir(path)
+        return Path(path).is_dir()  # os.path.isdir(path)
 
     @staticmethod
     def listdir(path):
