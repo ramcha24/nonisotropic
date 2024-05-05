@@ -98,7 +98,7 @@ class DistributedDataParallel(Model, torch.nn.parallel.DistributedDataParallel):
     def output_layer_names(self):
         return self.module.output_layer_names
 
-    @property
+    @propertyls
     def loss_criterion(self):
         return self.module.loss_criterion
 

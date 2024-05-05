@@ -168,8 +168,18 @@ cython_debug/
 /datasets/imagenet-hf/
 /datasets/cifar-100-python/
 /datasets/cifar10/cifar-10-batches-py/
+/datasets/cifar10c/
+/datasets/cifar100c/
+
 
 /runner_data/
+/rb_master/
+/models/cifar10/
+/models/cifar100/
+/models/imagenet/
+/models/tiny-imagenet-200/
+/models/cifar10c/
+/models/cifar100c/
 
 #checkpoint files 
 *.pt
@@ -184,3 +194,4 @@ cython_debug/
 *.JPEG
 *.png
 *.jpg
+/figures/

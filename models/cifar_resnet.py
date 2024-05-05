@@ -105,7 +105,7 @@ class Model(base.Model):
         N is the total number of layers in the network: 2 + 6D.
         The default value of W is 16 if it isn't provided.
 
-        For example, ResNet-20 has 20 layers. Exclusing the first convolutional layer and the final
+        For example, ResNet-20 has 20 layers. Excluding the first convolutional layer and the final
         linear layer, there are 18 convolutional layers in the blocks. That means there are nine
         blocks, meaning there are three blocks per segment. Hence, D = 3.
         The name of the network would be 'cifar_resnet_20' or 'cifar_resnet_20_16'.

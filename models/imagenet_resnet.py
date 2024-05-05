@@ -117,7 +117,7 @@ class Model(base.Model):
             )
         elif num == 269:
             model_fn = partial(
-                ResNet, torchvision.moedls.resnet.Bottleneck, [3, 30, 48, 8]
+                ResNet, torchvision.models.resnet.Bottleneck, [3, 30, 48, 8]
             )
 
         if len(model_name.split("_")) == 4:
