@@ -138,7 +138,7 @@ class Model(base.Model):
 
         dataset_hparams = hparams.DatasetHparams(
             dataset_name="cifar10",
-            batch_size=500,
+            batch_size=256,
             num_labels=10,
             num_channels=3,
             num_spatial_dims=32,

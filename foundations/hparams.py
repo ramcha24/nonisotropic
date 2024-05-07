@@ -252,7 +252,7 @@ class TrainingHparams(Hparams):
     adv_train_attack_norm: str = "2"
     adv_train_attack_power: float = 1.5
     adv_train_attack_iter: int = 20
-    adv_train_start_epoch: int = 5
+    adv_train_start_epoch: int = 20
     N_threshold: float = 0.2
     N_adv_train: bool = False
 

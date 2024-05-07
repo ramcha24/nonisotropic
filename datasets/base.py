@@ -127,7 +127,7 @@ class ImageDataset(Dataset):
             example, label = t(example, label)
         example = self._composed(example)
         for t in self._joint_tensor_transforms:
-            example, lable = t(example, label)
+            example, label = t(example, label)
 
         return example, label
 

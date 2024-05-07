@@ -1,5 +1,6 @@
 from platforms.platform import get_platform
 import datasets.registry
+from utilities.miscellaneous import sanity_check
 
 import torch
 import random
@@ -13,21 +14,9 @@ def partial_threat_fn(
     anchor_labels,
     all_pairs=False,
     return_all=False,
+    beta=1,
 ):
-    if reference_inputs.isnan().any() and get_platform().is_primary_process:
-        print("INSIDE PARTIAL_THREAT BUT REFERENCE points already contain NAN!")
-
-        return
-
-    if perturbed_inputs.isnan().any() and get_platform().is_primary_process:
-        print("INSIDE PARTIAL_THREAT BUT perturbed points already contain NAN!")
-
-        return
-
-    if anchor_points.isnan().any() and get_platform().is_primary_process:
-        print("INSIDE PARTIAL_THREAT BUT  ANCHOR points already contain NAN!")
-
-        return
+    sanity_check(locals())
 
     assert (
         reference_inputs.shape[1] == anchor_points.shape[1]
@@ -42,45 +31,23 @@ def partial_threat_fn(
         assert len(anchor_labels) == 1  # only one label for all anchor points.
         perturbations = -(reference_inputs - perturbed_inputs).unsqueeze(1)
 
+    # print(reference_inputs.shape)
+    # print(anchor_points.shape)
     # assuming batch of flat inputs, perturbations and threats
     unsafe_directions = -(reference_inputs.unsqueeze(1) - anchor_points)
-    if unsafe_directions.isnan().any() and get_platform().is_primary_process:
-        print("Warning!!! Inside partial threats, Unsafe directions has NaN values")
-        print("shape of unsafe direction is " + str(unsafe_directions.shape))
 
-    unsafe_norms = torch.linalg.norm(unsafe_directions, dim=2, ord=2) ** 2 + 1e-2
-    if unsafe_norms.isnan().any() and get_platform().is_primary_process:
-        print("Warning!!! Inside partial threats, Unsafe norms has NaN values")
-
-    # slower but hopefully error free:
-    # for _i in range(unsafe_directions.shape[0]):
-    #     for _j in range(unsafe_directions.shape[1]):
-    #         unsafe_directions[_i][_j] = unsafe_directions[_i][_j].div(
-    #             unsafe_norms[_i][_j] + 1e-2
-    #         )
+    unsafe_norms = (
+        beta * (torch.linalg.norm(unsafe_directions, dim=2, ord=2) ** 2) + 1e-2
+    )
 
     unsafe_directions = unsafe_directions / unsafe_norms.unsqueeze(-1)
 
     scaled_projections = torch.bmm(perturbations, unsafe_directions.permute(0, 2, 1))
+
     if not all_pairs:
         scaled_projections[reference_labels == anchor_labels[0]] = 0.0
 
     partial_threats = torch.max(scaled_projections, dim=2).values
-
-    if unsafe_directions.isnan().any() and get_platform().is_primary_process:
-        print(
-            "Warning!!! Inside partial threats, Unsafe directions has NaN values, definitely because of unsafe norms"
-        )
-        print("shape of unsafe direction is " + str(unsafe_directions.shape))
-        print("shape of unsafe normalization is " + str(unsafe_norms.shape))
-        print(
-            "shape of unsqueezed unsafe normalization is "
-            + str(unsafe_norms.unsqueeze(-1).shape)
-        )
-        print(unsafe_norms.isnan().any())
-
-    if scaled_projections.isnan().any() and get_platform().is_primary_process:
-        print("Warning!!! Inside partial threats, scaled projections has NaN values")
 
     if return_all:
         return (
@@ -97,13 +64,10 @@ def non_isotropic_threat(
     reference_inputs,
     reference_labels,
     perturbed_inputs,
-    perturbed_labels,
     greedy_subsets,
-    all_pairs=False,
 ):
-    # if get_platform().is_primary_process:
-    #     print("\nTrying to find non-isotropic threat")
-    # # ref_input : B x input_shape
+    sanity_check(locals())
+    # ref_input : B x input_shape
     # Perturbations : B x input_shape
     # one perturbation for each reference input.
     # iterate through threat specification tensors for each threat_label
@@ -120,60 +84,95 @@ def non_isotropic_threat(
         reference_inputs.shape[1] == perturbed_inputs.shape[1]
     ), "Reference and perturbed input shapes do not match"
 
+    assert (
+        reference_inputs.shape[0] == perturbed_inputs.shape[0]
+    ), "Reference and perturbed input batch sizes do not match"
+
+    num_labels = greedy_subsets.shape[0]
+
+    threats = torch.zeros(len(reference_inputs)).to(device=get_platform().torch_device)
+
+    for anchor_label in range(0, num_labels):
+        anchor_points = greedy_subsets[anchor_label].to(
+            device=get_platform().torch_device
+        )
+        anchor_points = torch.flatten(anchor_points, start_dim=1)
+
+        threats = torch.maximum(
+            partial_threat_fn(
+                reference_inputs,
+                reference_labels,
+                perturbed_inputs,
+                anchor_points,
+                [anchor_label],
+            ),
+            threats,
+        )
+    return threats
+
+
+def non_isotropic_threat_all_pairs(
+    reference_inputs,
+    reference_labels,
+    perturbed_inputs,
+    perturbed_labels,
+    greedy_subsets,
+):
+    sanity_check(locals())
+    # ref_input : B1 x input_shape
+    # Perturbations : B2 x input_shape
+    # Each perturbed input is compared to each reference input. so B1 x B2 threat values.
+    # iterate through threat specification tensors for each threat_label
+    # store the maximum projected displacement val - PL(ref_input, perturbation)
+    # account for labels of reference input when passing through maximum.
+
+    reference_inputs = reference_inputs.to(device=get_platform().torch_device)
+    reference_inputs = torch.flatten(reference_inputs, start_dim=1)
+
+    perturbed_inputs = perturbed_inputs.to(device=get_platform().torch_device)
+    perturbed_inputs = torch.flatten(perturbed_inputs, start_dim=1)
+
+    assert (
+        reference_inputs.shape[1] == perturbed_inputs.shape[1]
+    ), "Reference and perturbed input shapes do not match"
+
+    assert (
+        len(reference_labels.unique()) == 1
+    )  # only one label for all reference inputs.
+    assert (
+        len(perturbed_labels.unique()) == 1
+    )  # only one label for all perturbed inputs.
+    assert (
+        reference_labels[0] != perturbed_labels[0]
+    ), "Reference and perturbed input labels are the same"
+
     num_labels = greedy_subsets.shape[0]
     per_label = greedy_subsets.shape[1]
 
-    if all_pairs:
-        assert (
-            len(reference_labels.unique()) == 1
-        )  # only one label for all reference inputs.
-        assert (
-            len(perturbed_labels.unique()) == 1
-        )  # only one label for all perturbed inputs.
-        assert (
-            reference_labels[0] != perturbed_labels[0]
-        ), "Reference and perturbed input labels are the same"
+    threats = torch.zeros(len(reference_inputs), len(perturbed_inputs)).to(
+        device=get_platform().torch_device
+    )
 
-        threats = torch.zeros(len(reference_inputs), len(perturbed_inputs)).to(
-            device=get_platform().torch_device
-        )
-        label_step = 1
-    else:
-        assert (
-            reference_inputs.shape[0] == perturbed_inputs.shape[0]
-        ), "Reference and perturbed input batch sizes do not match"
-        assert perturbed_labels is None
-
-        threats = torch.zeros(len(reference_inputs)).to(
-            device=get_platform().torch_device
-        )
-        label_step = 10
+    label_step = 4
 
     for threat_label in range(0, num_labels, label_step):
         label_list = torch.arange(threat_label, threat_label + label_step)
 
-        if all_pairs:
-            anchor_points = greedy_subsets[
-                label_list[label_list != reference_labels[0]]
-            ].to(device=get_platform().torch_device)
-
-            anchor_labels = []
-
-            for _label in label_list[label_list != reference_labels[0]]:
-                anchor_labels.append(
-                    _label
-                    * torch.ones(per_label).to_device(get_platform().torch_device)
-                )
-        else:
-            anchor_points = greedy_subsets[label_list].to(
-                device=get_platform().torch_device
-            )
-            anchor_labels = [threat_label]
+        anchor_points = greedy_subsets[
+            label_list[label_list != reference_labels[0]]
+        ].to(device=get_platform().torch_device)
 
         anchor_points = torch.flatten(anchor_points, start_dim=2)
         anchor_points = anchor_points.view(
             anchor_points.shape[0] * anchor_points.shape[1], anchor_points.shape[2]
         )
+
+        anchor_labels = []
+
+        for _label in label_list[label_list != reference_labels[0]]:
+            anchor_labels.append(
+                _label * torch.ones(per_label).to_device(get_platform().torch_device)
+            )
 
         threats = torch.maximum(
             partial_threat_fn(
@@ -182,7 +181,7 @@ def non_isotropic_threat(
                 perturbed_inputs,
                 anchor_points,
                 anchor_labels,
-                all_pairs=all_pairs,
+                all_pairs=True,
             ),
             threats,
         )
@@ -194,10 +193,11 @@ def non_isotropic_projection(
     reference_labels,
     perturbed_inputs,
     greedy_subsets,
-    threshold=0.1,
+    threshold,
     num_iterations=10,
     verbose=False,
 ):
+    sanity_check(locals())
     # ref_input : B x input_shape
     # Perturbations : B x input_shape
     # one perturbation for each reference input.
@@ -213,20 +213,19 @@ def non_isotropic_projection(
     perturbed_inputs = torch.flatten(perturbed_inputs, start_dim=1)
 
     threats = non_isotropic_threat(
-        reference_inputs, reference_labels, perturbed_inputs, None, greedy_subsets
+        reference_inputs, reference_labels, perturbed_inputs, greedy_subsets
     )
+
     # artificial sanitizing
-    temp_max = torch.nan_to_num(threats, nan=-1).max()
-    threats = torch.nan_to_num(threats, nan=temp_max)
-    max_threat_bp = threats.max()
+    max_threat_bp = threats[threats == threats].max()
+    threats[threats != threats] = max_threat_bp
+
     if max_threat_bp <= threshold:
         return torch.unflatten(perturbed_inputs, 1, input_shape)
 
     num_labels = greedy_subsets.shape[0]
 
     current_perturbations = -(reference_inputs - perturbed_inputs)
-    # if get_platform().is_primary_process:
-    #     print("\n About to start projection")
 
     for t in range(num_iterations):
         for threat_label in range(0, num_labels):
@@ -235,13 +234,6 @@ def non_isotropic_projection(
                 device=get_platform().torch_device
             )
             anchor_points = torch.flatten(anchor_points, start_dim=1)
-
-            # if get_platform().is_primary_process:
-            #     print(
-            #         "About to call partial_threat_fn in iteration {} w.r.t threat label {}".format(
-            #             t, threat_label
-            #         )
-            #     )
 
             (
                 partial_threats,
@@ -256,63 +248,16 @@ def non_isotropic_projection(
                 [threat_label],
                 return_all=True,
             )
-            # The code snippet is checking if there are any NaN values in the `unsafe_directions` and
-            # if the current process is the primary process. If there are NaN values present and the
-            # current process is the primary process, it will print a warning message indicating that
-            # there are unsafe directions with NaN values after a certain iteration with respect to a
-            # threat label.
-            if unsafe_directions.isnan().any() and get_platform().is_primary_process:
-                print(
-                    "Warning!!! Unsafe directions after iteration {} projection w.r.t threat label {} has NaN values".format(
-                        t, threat_label
-                    )
-                )
-                return
 
-            if unsafe_norms.isnan().any() and get_platform().is_primary_process:
-                print(
-                    "Warning!!! Unsafe norms after iteration {} projection w.r.t threat label {} has NaN values".format(
-                        t, threat_label
-                    )
-                )
-                return
-
-            if scaled_projections.isnan().any() and get_platform().is_primary_process:
-                print(
-                    "Warning!!! scaled projections after iteration {} projection w.r.t threat label {} has NaN values".format(
-                        t, threat_label
-                    )
-                )
-                return
-
-            if partial_threats.isnan().any() and get_platform().is_primary_process:
-                print(
-                    "Warning!!! partial threats after iteration {} projection w.r.t threat label {} has NaN values".format(
-                        t, threat_label
-                    )
-                )
-                return
-
-            partial_threats = torch.nan_to_num(partial_threats, nan=1.0)
+            partial_threats[partial_threats != partial_threats] = 1.0
             if partial_threats.max() <= threshold:
                 continue  # no need to project
-
-            # if get_platform().is_primary_process:
-            #     print(
-            #         "\nscaled_projections shape is {}".format(scaled_projections.shape)
-            #     )
-            #     print("\nunsafe_directions shape is {}".format(unsafe_directions.shape))
-            #     print("\nunsafe_norms shape is {}".format(unsafe_norms.shape))
-            #     print("\npartial_threats shape is {}".format(partial_threats.shape))
 
             max_selection = list(
                 enumerate(
                     torch.argmax(scaled_projections, dim=2).detach().cpu().numpy()
                 )
             )
-
-            # if get_platform().is_primary_process:
-            #     print(unsafe_directions[max_selection[0][0]][max_selection[0][1]].shape)
 
             max_unsafe_directions = torch.stack(
                 [
@@ -332,28 +277,10 @@ def non_isotropic_projection(
 
             residuals = partial_threats - threshold
             residuals[residuals < 0.0] = 0.0
-            # if get_platform().is_primary_process:
-            #     print("\nMax unsafe direction shape is {}".format(max_unsafe_directions.shape))
-            #     print("\nMax unsafe norms shape is {}".format(max_unsafe_norms.shape))
-            #     print("\nResiduals shape is {}".format(residuals.shape))
 
-            step_size = residuals * (
-                max_unsafe_norms.squeeze(1)
-            )  # torch.sqrt(max_unsafe_norms.squeeze(1))?
-            # if get_platform().is_primary_process:
-            #     print("\nStep size shape is {}".format(step_size.shape))
+            step_size = residuals * (max_unsafe_norms.squeeze(1))
 
             current_perturbations -= 2.0 * max_unsafe_directions * step_size[:, None]
-            if (
-                current_perturbations.isnan().any()
-                and get_platform().is_primary_process
-            ):
-                print(
-                    "Warning!!! Current perturbations after iteration {} projection w.r.t threat label {} has NaN values".format(
-                        t, threat_label
-                    )
-                )
-                return
 
     current_perturbations = current_perturbations.squeeze(1)
 
@@ -361,12 +288,11 @@ def non_isotropic_projection(
         reference_inputs,
         reference_labels,
         reference_inputs + current_perturbations,
-        None,
         greedy_subsets,
     )
-    temp_max = torch.nan_to_num(threats, nan=-1).max()
-    threats = torch.nan_to_num(threats, nan=temp_max)
-    max_threat_ap = threats.max()
+    max_threat_ap = threats[threats == threats].max()
+    threats[threats != threats] = max_threat_ap
+
     if get_platform().is_primary_process and verbose:
         print(
             "Max threat : Before projection was {} and after projection is {}".format(
@@ -377,12 +303,6 @@ def non_isotropic_projection(
     # undo flattening
     reference_inputs = torch.unflatten(reference_inputs, 1, input_shape)
     current_perturbations = torch.unflatten(current_perturbations, 1, input_shape)
-
-    if current_perturbations.isnan().any() and get_platform().is_primary_process:
-        print("Warning!!! Current perturbations after projection has NaN values")
-
-    if max_threat_ap.isnan().any() and get_platform().is_primary_process:
-        print("Warning!!! the max threat of projections is nan!")
 
     if max_threat_ap <= threshold:
         return reference_inputs + current_perturbations

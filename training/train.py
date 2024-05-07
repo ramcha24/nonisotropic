@@ -68,14 +68,6 @@ def train(
         training_hparams, optimizer, train_loader.iterations_per_epoch
     )
 
-    # Handle parallelism if applicable.
-    if get_platform().is_distributed:
-        model = DistributedDataParallel(model, device_ids=[get_platform().local_rank])
-        print("In distributed!, rank id is " + str(get_platform().local_rank))
-    # elif get_platform().is_parallel:
-    #    model = DataParallel(model)
-
-    eta = 0.1  # regularization constant for orthogonal layer weights
     # Get the random seed for the data order.
     data_order_seed = training_hparams.data_order_seed
 
@@ -83,6 +75,11 @@ def train(
     cp_step, cp_logger = restore_checkpoint(
         output_location, model, optimizer, train_loader.iterations_per_epoch
     )
+
+    # Handle parallelism if applicable.
+    if get_platform().is_distributed:
+        model = DistributedDataParallel(model, device_ids=[get_platform().local_rank])
+
     start_step = cp_step or start_step or Step.zero(train_loader.iterations_per_epoch)
     logger = cp_logger or MetricLogger()
     with warnings.catch_warnings():
@@ -100,25 +97,17 @@ def train(
     if (
         dataset_hparams.N_project
         or dataset_hparams.N_mixup
-        or (training_hparams.adv_train and training_hparams.N_ad_train)
+        or training_hparams.N_adv_train
     ):
         greedy_subsets = load_greedy_subset(dataset_hparams)
 
     # The training loop.
-    # print_count = 0
     for epoch in range(start_step.ep, end_step.ep + 1):
-        # Ensure the data order is different for each epoch.
         train_loader.shuffle(
             None if data_order_seed is None else (data_order_seed + epoch)
         )
 
         for iteration, (examples, labels) in enumerate(train_loader):
-            if (
-                epoch % 5 == 0
-                and iteration % 50 == 0
-                and get_platform().is_primary_process
-            ):
-                print("\n At epoch, iteration ({} {})".format(epoch, iteration))
 
             # Advance the data loader until the start epoch and iteration
             if epoch == start_step.ep and iteration < start_step.it:
@@ -136,32 +125,8 @@ def train(
             # Train!
             examples = examples.to(device=get_platform().torch_device)
             labels = labels.to(device=get_platform().torch_device)
-            labels_size = torch.tensor(len(labels), device=get_platform().torch_device)
-            # if print_count < 10 and get_platform().is_primary_process:
-            #     print(
-            #         "\n batch size in {} gpu initially is {}".format(
-            #             get_platform().local_rank, labels_size
-            #         )
-            #     )
-            #     print_count += 1
-            if examples.isnan().any() and get_platform().is_primary_process:
-                print(
-                    "Warning!!! Examples have NaN values before augmentation! (WTF) at epoch {}, iteration {}".format(
-                        epoch, iteration
-                    )
-                )
-                return
 
             if dataset_hparams.N_mixup:
-                # if get_platform().is_primary_process and (
-                #     epoch % 5 == 0 and iteration % 25 == 0
-                # ):
-                #     print(
-                #         "\n About to do Nmixup at epoch {}, iteration {}".format(
-                #             epoch, iteration
-                #         )
-                #     )
-
                 shuffle_indices = torch.randperm(len(labels))
                 perturbed_examples = non_isotropic_projection(
                     examples,
@@ -173,16 +138,6 @@ def train(
                 )
                 examples = torch.cat((examples, perturbed_examples), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
-                labels_size = torch.tensor(
-                    len(labels), device=get_platform().torch_device
-                )
-                # if print_count < 10 and get_platform().is_primary_process:
-                #     print(
-                #         "\n batch size in {} gpu after mixup augmentation is {}".format(
-                #             get_platform().local_rank, labels_size
-                #         )
-                #     )
-                #     print_count += 1
 
             if dataset_hparams.gaussian_augment or dataset_hparams.N_project:
                 perturbation = torch.zeros_like(examples).to(
@@ -194,15 +149,6 @@ def train(
                 )
 
                 if dataset_hparams.N_project:
-                    # if get_platform().is_primary_process and (
-                    #     epoch % 5 == 0 and iteration % 25 == 0
-                    # ):
-                    #     print(
-                    #         "\n About to do Nproject at epoch {}, iteration {}".format(
-                    #             epoch, iteration
-                    #         )
-                    #     )
-                    # project perturbation to be within epsilon sublevel set of the threat function
                     perturbed_examples = non_isotropic_projection(
                         examples,
                         labels,
@@ -219,16 +165,6 @@ def train(
 
                 examples = torch.cat((examples, examples + perturbation), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
-                labels_size = torch.tensor(
-                    len(labels), device=get_platform().torch_device
-                )
-                if examples.isnan().any() and get_platform().is_primary_process:
-                    print(
-                        "Warning!!! Examples have NaN values after nonisotropic augmentation! at epoch {}, iteration {}".format(
-                            epoch, iteration
-                        )
-                    )
-                    return
 
             if (
                 training_hparams.N_adv_train or training_hparams.adv_train
@@ -248,26 +184,19 @@ def train(
                     attack_power / 10,
                     training_hparams.adv_train_attack_iter,
                 )
+                perturbation[perturbation != perturbation] = 0
+
                 # lets do some journalism to see if its faithful. and it works!
                 # if (epoch % 2 == 0) and (iteration == 0):
                 #    report_adv(model, examples, labels, perturbation)
 
                 if training_hparams.N_adv_train:
-                    # project delta to be within epsilon sublevel set of the threat function
-                    # if get_platform().is_primary_process and (
-                    #     epoch % 5 == 0 and iteration % 25 == 0
-                    # ):
-                    #     print(
-                    #         "\n About to do nonisotropic adversarial training at epoch {}, iteration {}".format(
-                    #             epoch, iteration
-                    #         )
-                    #     )
                     perturbed_examples = non_isotropic_projection(
                         examples,
                         labels,
                         examples + perturbation,
                         greedy_subsets,
-                        threshold=training_hparams.non_isotropic_training_threshold,
+                        threshold=training_hparams.N_threshold,
                         # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                     )
                     perturbation = perturbed_examples - examples
@@ -278,28 +207,20 @@ def train(
 
                 examples = torch.cat((examples, examples + perturbation), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
-                labels_size = torch.tensor(
-                    len(labels), device=get_platform().torch_device
-                )
-                # if print_count < 10 and get_platform().is_primary_process:
-                #     print(
-                #         "\n batch size in {} gpu after adversarial training is {}".format(
-                #             get_platform().local_rank, labels_size
-                #         )
-                #     )
-                #     print_count += 1
 
             step_optimizer.zero_grad()
             model.train()
+
             if examples.isnan().any() and get_platform().is_primary_process:
                 print(
-                    "Warning!!! Examples have NaN values after augmentation! at epoch {}, iteration {}".format(
+                    "Warning!!! Examples have NaN values after augmentation/adversarial training! at epoch {}, iteration {}".format(
                         epoch, iteration
                     )
                 )
                 return
 
             loss = model.loss_criterion(model(examples), labels)
+
             if loss.isnan().any() and get_platform().is_primary_process:
                 print(
                     "Warning!!! Loss is NaN at epoch {}, iteration {}".format(

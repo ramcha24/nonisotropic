@@ -146,9 +146,10 @@ class Model(base.Model):
 
         dataset_hparams = hparams.DatasetHparams(
             dataset_name="imagenet",
-            batch_size=256,
+            batch_size=128,
             num_labels=1000,
-            input_shape=(3, 224, 224),
+            num_channels=3,
+            num_spatial_dims=224,
         )
 
         training_hparams = hparams.TrainingHparams(
