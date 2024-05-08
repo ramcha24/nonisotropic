@@ -9,7 +9,7 @@ from foundations.step import Step
 from platforms.platform import get_platform
 
 from training import checkpointing
-from attacks.adv_train_util import get_attack
+from training.adv_train_util import get_attack
 
 from utilities.evaluation_utils import correct, get_soft_margin
 from utilities.plotting_utils import plot_soft_margin

@@ -85,13 +85,19 @@ class Platform(Hparams):
 
     @property
     @abc.abstractmethod
-    def root(self):
-        """The root directory where data will be stored"""
+    def runner_root(self):
+        """The root directory where runner data will be stored"""
         pass
 
     @property
     @abc.abstractmethod
     def dataset_root(self):
+        """The root directory where datasets will be stored"""
+        pass
+
+    @property
+    @abc.abstractmethod
+    def threat_specification_root(self):
         """The root directory where datasets will be stored"""
         pass
 

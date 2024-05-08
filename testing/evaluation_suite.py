@@ -1,13 +1,15 @@
 import torch
-import torch.nn as nn
 import time
+import os
 from random import randrange
-import math
-import numpy as np
-import eagerpy as ep
+from autoattack import AutoAttack
 
-from foolbox import PyTorchModel, accuracy, samples
 
+from threat_specification.greedy_subset import load_greedy_subset
+from threat_specification.projected_displacement import (
+    non_isotropic_projection,
+    non_isotropic_threat,
+)
 
 from platforms.platform import get_platform
 
@@ -16,13 +18,6 @@ from foundations import hparams
 
 from utilities.evaluation_utils import correct, get_soft_margin, get_pointwise_margin
 from utilities.plotting_utils import plot_soft_margin, plot_hist, plot_security_curve
-
-from lipschitz.lip_registry import registered_estimators
-from attacks import attack_registry
-from attacks.base import FixedSizeAttack, MinimizationAttack
-
-# load attack
-from autoattack import AutoAttack
 
 
 def create_standard_eval(
@@ -102,6 +97,7 @@ def create_standard_eval(
 
 
 def create_robust_eval(
+    dataset_hparams: hparams.DatasetHparams,
     loader: DataLoader,
     test_output_location,
     data_str,
@@ -117,7 +113,7 @@ def create_robust_eval(
     def robust_evaluation(model, feedback):
 
         if verbose:
-            iso_str = "" if not non_isotropic else "non_isotropic"
+            iso_str = "isotropic" if not non_isotropic else "non isotropic"
             print(
                 "\n"
                 + "-" * 20
@@ -127,141 +123,137 @@ def create_robust_eval(
                 + "-" * 20
             )
 
-        name = "attack_evaluation_" + data_str
-        output_location = (
-            test_output_location
-            + "/"
-            + data_str
-            + "_attack_evaluation/"
-            + att.get_name()
+        name = "robust_evaluation_" + data_str
+        eval_dir = os.path.join(test_output_location, name)
+        attack_str = ""
+        if non_isotropic:
+            attack_str += "non_isotropic_"
+        else:
+            attack_str += "isotropic_"
+        attack_str += str(attack_norm)
+
+        info = {}
+        example_count = torch.tensor(0.0).to(get_platform().torch_device)
+        total_correct = torch.tensor(0.0).to(get_platform().torch_device)
+
+        model.eval()
+
+        adversary = AutoAttack(
+            model,
+            norm=attack_norm,
+            eps=attack_size,
+            log_path=os.path.join(eval_dir, attack_str),
+            device=get_platform().torch_device,
         )
 
-        if not non_isotropic:
-            adversary = AutoAttack(
-                model,
-                norm=attack_norm,
-                eps=attack_size,
-                log_path=test_output_location,
-            )
-        else:
-            adversary = AutoAttack(
-                model,
-                norm=attack_norm,
-                eps=5 * attack_size,
-                log_path=test_output_location,
-            )
+        greedy_subsets = load_greedy_subset(dataset_hparams)
 
-        l = [x for (x, y) in loader]
-
-        x_test = torch.cat(l, 0)
-        l = [y for (x, y) in test_loader]
-        y_test = torch.cat(l, 0)
-
-        # example of custom version
-        if args.version == "custom":
-            adversary.attacks_to_run = ["apgd-ce", "fab"]
-            adversary.apgd.n_restarts = 2
-            adversary.fab.n_restarts = 2
+        current_batch_index = -1
 
         # run attack and save images
         with torch.no_grad():
-            if not args.individual:
-                adv_complete = adversary.run_standard_evaluation(
-                    x_test[: args.n_ex],
-                    y_test[: args.n_ex],
-                    bs=args.batch_size,
-                    state_path=args.state_path,
+            for examples, labels in loader:
+                current_batch_index += 1
+                if current_batch_index != random_batch_index:
+                    continue
+
+                examples = examples.to(get_platform().torch_device)
+                labels = labels.squeeze().to(get_platform().torch_device)
+                labels_size = torch.tensor(
+                    len(labels), device=get_platform().torch_device
+                )
+                example_count += labels_size
+
+                examples_adv, labels_adv = adversary.run_standard_evaluation(
+                    examples, labels, bs=labels_size, return_labels=True
                 )
 
-                torch.save(
-                    {"adv_complete": adv_complete},
-                    "{}/{}_{}_1_{}_eps_{:.5f}.pth".format(
-                        args.save_dir,
-                        "aa",
-                        args.version,
-                        adv_complete.shape[0],
-                        args.epsilon,
-                    ),
-                )
+                if non_isotropic:
+                    # project examples_adv to the sublevel set
+                    examples_adv = non_isotropic_projection(
+                        examples,
+                        labels,
+                        examples_adv,
+                        greedy_subsets,
+                        threshold=dataset_hparams.N_threshold,
+                    )
+                    output = model(examples_adv)
+                    total_correct += correct(labels, output)
+                else:
+                    # store Nonisotropic threats
+                    total_correct += torch.sum(torch.eq(labels_adv.eq, labels))
 
-        if name not in feedback.keys():
-            feedback[name] = {}
+                    threats = non_isotropic_threat(
+                        examples,
+                        labels,
+                        examples_adv,
+                        greedy_subsets,
+                    )
 
-        info = {}
-
-        # loader.shuffle(0)
-        current_batch_index = -1
-        model.eval()
-
-        for examples, labels in loader:
-            current_batch_index += 1
-            # only to want to evaluate for a single random batch (so not for the entire dataset?)
-            if current_batch_index > random_batch_index:
-                break
-            if current_batch_index != random_batch_index:
-                continue
-
-            examples = examples.to(get_platform().torch_device)
-            labels = labels.squeeze().to(get_platform().torch_device)
-            batch_size = len(examples)
-
-            output = model(examples)
-            margins = []
-            for index in range(0, len(examples)):
-                margins.append(get_pointwise_margin(output[index, :], labels[index]))
-
-            if verbose:
-                print("Generating adversarial examples...")
-
-            best_adv, best_adv_radius, found_adv = att.generate_adversarial_example(
-                model, examples, labels, margins
+        # Share the information if distributed.
+        if get_platform().is_distributed:
+            torch.distributed.reduce(
+                total_correct, 0, op=torch.distributed.ReduceOp.SUM
+            )
+            torch.distributed.reduce(
+                example_count, 0, op=torch.distributed.ReduceOp.SUM
             )
 
-            success_rate = 100 * sum(found_adv) / batch_size
-            adv_output = model(best_adv)
-            robust_accuracy = 100 * correct(labels, adv_output).item() / batch_size
-            is_correct = torch.eq(labels, adv_output.argmax(dim=1))
-            check = torch.sum(torch.eq(torch.Tensor(found_adv).cuda(), is_correct))
-            if success_rate != 100 - robust_accuracy or check != 0.0:
-                print("issue with foolbox usage")
-                print(
-                    "success rate is {} but 100 - robust_accuracy is {}".format(
-                        success_rate, 100 - robust_accuracy
-                    )
-                )
-                print("check is {}".format(check))
-            # rob_acc = accuracy(foolbox_model, best_adv, labels)
-            # print(rob_acc)
+        total_correct = total_correct.cpu().item()
+        example_count = example_count.cpu().item()
+        robust_accuracy = 100 * total_correct / example_count
 
-            if verbose:
-                print(
-                    "The attack {} resulted in a robust accuracy of {}".format(
-                        att.get_name(), robust_accuracy
-                    )
-                )
-                print(
-                    "It had a success rate of {} with a median corruption radius {}".format(
-                        success_rate, torch.median(best_adv_radius)
-                    )
-                )
-                print(best_adv_radius)
+        info["robust_accuracy"] = robust_accuracy
 
+        if verbose and get_platform().is_primary_process:
             nonlocal time_of_last_call
             elapsed = (
                 0 if time_of_last_call is None else time.time() - time_of_last_call
             )
-
+            print(
+                "{} robust evaluation on {} data w.r.t L{}: \t robust_accuracy {:.2f}% \t examples {:d}\t time {:.2f}s".format(
+                    iso_str.capitalize(),
+                    data_str,
+                    attack_norm,
+                    robust_accuracy,
+                    int(example_count),
+                    elapsed,
+                )
+            )
+            time_of_last_call = time.time()
             info["elapsed"] = elapsed
-            info["Best_Adversary"] = best_adv
-            info["Best_Adversary_Radius"] = best_adv_radius
-            info["Success"] = found_adv
 
-            feedback[name][att.get_name()] = info
+        feedback[name] = info
 
-    return attack_evaluation
+    return robust_evaluation
+
+
+def image_generation_eval():
+    # store a few isotropic and non isotropic adversarial images
+    # store plots of robust accuracy vs threshold. (but this requires many robust-eval calls)
+    # for isotropic threat : store histograms of the threats of adversarial examples.
+    pass
+    # if isotropic: # save images
+    #     for i in range(len(examples_adv)):
+    #         img = examples_adv[i].cpu().numpy()
+    #         img = np.transpose(img, (1, 2, 0))
+    #         img = (img + 1) / 2
+    #         img = np.clip(img, 0, 1)
+    #         img = (img * 255).astype(np.uint8)
+    #         img = Image.fromarray(img)
+    #         img.save(
+    #             os.path.join(
+    #                 eval_dir,
+    #                 "adv_img_{}_{}.png".format(
+    #                     current_batch_index, i
+    #                 ),
+    #             )
+    #         )
+    # maybe project the adversarial examples and store them. (for isotropic attacks)
 
 
 def evaluation_suite(
+    dataset_hparams: hparams.DatasetHparams,
     testing_hparams: hparams.TestingHparams,
     test_output_location,
     train_set_loader: DataLoader,
@@ -300,6 +292,7 @@ def evaluation_suite(
 
         evaluations.append(
             create_robust_eval(
+                dataset_hparams,
                 test_set_loader,
                 test_output_location,
                 "test",
@@ -312,6 +305,7 @@ def evaluation_suite(
         if eval_on_train:
             evaluations.append(
                 create_robust_eval(
+                    dataset_hparams,
                     train_set_loader,
                     test_output_location,
                     "train",
@@ -331,6 +325,7 @@ def evaluation_suite(
 
         evaluations.append(
             create_robust_eval(
+                dataset_hparams,
                 test_set_loader,
                 test_output_location,
                 "test",
@@ -344,6 +339,7 @@ def evaluation_suite(
         if eval_on_train:
             evaluations.append(
                 create_robust_eval(
+                    dataset_hparams,
                     train_set_loader,
                     test_output_location,
                     "train",

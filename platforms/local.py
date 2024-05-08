@@ -23,12 +23,16 @@ class Platform(base.Platform):
         return self.local_rank == 0
 
     @property
-    def root(self):
+    def runner_root(self):
         return os.path.join(pathlib.Path.home(), "nonisotropic/runner_data")
 
     @property
     def dataset_root(self):
         return os.path.join(pathlib.Path.home(), "nonisotropic/datasets")
+
+    @property
+    def threat_specification_root(self):
+        return os.path.join(pathlib.Path.home(), "nonisotropic/threat_specification")
 
     @property
     def imagenet_root(self):

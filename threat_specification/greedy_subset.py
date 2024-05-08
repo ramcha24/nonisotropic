@@ -32,12 +32,10 @@ def get_greedy_subset_partition(domain, num_points):
 def save_greedy_partition(dataset_hparams, per_label):
     # only find greedy subsets from the training data.
     dataset_loc = os.path.join(
-        get_platform().dataset_root, dataset_hparams.dataset_name
+        get_platform().threat_specification_root, dataset_hparams.dataset_name
     )
-    greedy_root = dataset_loc + "/train/greedy"
-    dir_path = greedy_root + "/per_label_" + str(per_label)
+    dir_path = os.path.join(dataset_loc, "per_label_" + str(per_label))
     get_platform().makedirs(dir_path)
-    file_path = "/greedy_partition_"
     num_labels = dataset_hparams.num_labels
 
     for label in range(num_labels):
@@ -73,12 +71,12 @@ def save_greedy_partition(dataset_hparams, per_label):
 
         torch.save(
             greedy_class_partition_first_half,
-            dir_path + file_path + "first_half_" + str(label) + ".pt",
+            dir_path + "first_half_" + str(label) + ".pt",
         )
 
         torch.save(
             greedy_class_partition_second_half,
-            dir_path + file_path + "second_half_" + str(label) + ".pt",
+            dir_path + "second_half_" + str(label) + ".pt",
         )
         del greedy_class_partition_first_half, greedy_class_partition_second_half
 
@@ -127,9 +125,10 @@ def load_greedy_subset(dataset_hparams):
         dataset_hparams.num_spatial_dims
     ] * 2
     per_label = dataset_hparams.greedy_per_label
+    num_labels = (dataset_hparams.num_labels,)
     (first_half, second_half) = load_greedy_partition(
         per_label,
-        dataset_hparams.num_labels,
+        num_labels,
         input_shape,
         dataset_loc=dataset_loc,
     )

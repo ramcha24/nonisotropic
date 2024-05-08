@@ -1,9 +1,7 @@
 from platforms.platform import get_platform
-import datasets.registry
 from utilities.miscellaneous import sanity_check
 
 import torch
-import random
 
 
 def partial_threat_fn(
@@ -14,7 +12,7 @@ def partial_threat_fn(
     anchor_labels,
     all_pairs=False,
     return_all=False,
-    beta=1,
+    beta=0.5,
 ):
     sanity_check(locals())
 
@@ -31,8 +29,6 @@ def partial_threat_fn(
         assert len(anchor_labels) == 1  # only one label for all anchor points.
         perturbations = -(reference_inputs - perturbed_inputs).unsqueeze(1)
 
-    # print(reference_inputs.shape)
-    # print(anchor_points.shape)
     # assuming batch of flat inputs, perturbations and threats
     unsafe_directions = -(reference_inputs.unsqueeze(1) - anchor_points)
 

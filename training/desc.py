@@ -54,7 +54,7 @@ class TrainingDesc(desc.Desc):
         return datasets_registry.num_labels(self.dataset_hparams)
 
     def run_path(self, replicate, verbose=False):
-        root_location = get_platform().root
+        root_location = get_platform().runner_root
 
         dataset_str = self.get_dataset_name()
         model_str = self.get_model_name()

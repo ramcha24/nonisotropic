@@ -6,13 +6,12 @@ from torchvision.transforms import v2
 
 from datasets.base import DataLoader
 import datasets.registry
-from datasets.greedy_subset import load_greedy_subset
 
 from foundations import hparams
 from foundations import paths
 from foundations.step import Step
 
-from models.base import Model, DataParallel, DistributedDataParallel
+from models.base import Model, DistributedDataParallel
 import models.registry
 
 from platforms.platform import get_platform
@@ -21,10 +20,11 @@ from training import optimizers
 from training import standard_callbacks
 from training.metric_logger import MetricLogger
 
-from attacks.adv_train_util import get_attack
-from attacks.projected_displacement import non_isotropic_projection
-from utilities.capacity_utils import get_classifier_constant, get_feature_reg
+from training.adv_train_util import get_attack
 from utilities.evaluation_utils import report_adv
+
+from threat_specification.projected_displacement import non_isotropic_projection
+from datasets.greedy_subset import load_greedy_subset
 
 
 def train(

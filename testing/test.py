@@ -33,6 +33,9 @@ def standard_test(
             "The training location does not have a checkpoint, has the model been trained already?"
         )
 
+    train_loader = datasets.registry.get(dataset_hparams, train=True)
+    test_loader = datasets.registry.get(dataset_hparams, train=False)
+
     model.to(get_platform().torch_device)
 
     checkpoint = get_platform().load_model(
@@ -44,11 +47,10 @@ def standard_test(
     if get_platform().is_distributed:
         model = DistributedDataParallel(model, device_ids=[get_platform().local_rank])
 
-    train_loader = datasets.registry.get(dataset_hparams, train=True)
-    test_loader = datasets.registry.get(dataset_hparams, train=False)
     # here if the runner is asking for comparing threats, then it would be good to return list(class_wise_loaders)
 
     evaluations = evaluation_suite(
+        dataset_hparams,
         testing_hparams,
         test_output_location,
         train_loader,
