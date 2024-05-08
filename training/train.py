@@ -1,6 +1,8 @@
 import typing
 import warnings
 import torch
+from torchvision.transforms import v2
+
 
 from datasets.base import DataLoader
 import datasets.registry
@@ -100,6 +102,9 @@ def train(
         or training_hparams.N_adv_train
     ):
         greedy_subsets = load_greedy_subset(dataset_hparams)
+
+    if dataset_hparams.mixup:
+        mixup = v2.transforms.MixUp(num_classes=dataset_hparams.num_labels)
 
     # The training loop.
     for epoch in range(start_step.ep, end_step.ep + 1):
@@ -207,6 +212,9 @@ def train(
 
                 examples = torch.cat((examples, examples + perturbation), dim=0)
                 labels = torch.cat((labels, labels), dim=0)
+
+            if dataset_hparams.mixup:
+                examples, labels = mixup(examples, labels)
 
             step_optimizer.zero_grad()
             model.train()

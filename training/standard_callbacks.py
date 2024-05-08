@@ -47,7 +47,6 @@ def create_eval_callback(eval_name: str, loader: DataLoader, verbose=False):
         example_count = torch.tensor(0.0).to(get_platform().torch_device)
         total_loss = torch.tensor(0.0).to(get_platform().torch_device)
         total_correct = torch.tensor(0.0).to(get_platform().torch_device)
-        max_out = 0.0
 
         model.eval()
 
@@ -62,24 +61,6 @@ def create_eval_callback(eval_name: str, loader: DataLoader, verbose=False):
                 example_count += labels_size
                 total_loss += model.loss_criterion(output, labels) * labels_size
                 total_correct += correct(labels, output)
-
-                m_out = torch.max(output).item()
-                if m_out > max_out:
-                    max_out = m_out
-
-            # turn this into a function call on get_prob(data, thresholds)
-            # num_bins = 100
-            # margins = torch.linspace(0, max_out, steps=num_bins)
-            # accuracies = torch.zeros(num_bins)
-
-            # if (step.ep == 38) and (step.it == 0):
-            #    for examples, labels in loader:
-            #        examples = examples.to(get_platform().torch_device)
-            #        labels = labels.squeeze().to(get_platform().torch_device)
-            #        actual_margins = torch.zeros(len(examples))
-            #        get_soft_margin(
-            #            model, examples, labels, margins, accuracies, actual_margins
-            #        )
 
         # Share the information if distributed.
         if get_platform().is_distributed:
@@ -118,15 +99,6 @@ def create_eval_callback(eval_name: str, loader: DataLoader, verbose=False):
                         elapsed,
                     )
                 )
-
-                # if (step.ep == 38) and (step.it == 0):
-                #    target_accuracy, target_margin = plot_soft_margin(
-                #        margins, accuracies, output_location
-                #    )
-                #    print(
-                #        "Target Accuracy %.2f at Margin = %.4f"
-                #        % (target_accuracy, target_margin)
-                #    )
 
                 time_of_last_call = time.time()
 

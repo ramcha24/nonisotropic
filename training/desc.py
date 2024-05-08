@@ -1,7 +1,6 @@
 import argparse
 from dataclasses import dataclass, fields
 import os
-import hashlib
 
 from datasets import registry as datasets_registry
 from foundations import desc

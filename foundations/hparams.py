@@ -174,6 +174,7 @@ class DatasetHparams(Hparams):
     N_threshold: float = 0.2
     N_project: bool = False
     N_mixup: bool = False
+    mixup: bool = False
 
     _name: str = "Dataset Hyperparameters"
     _description: str = "Hyperparameters that select the dataset, data augmentation, and other data transformations."
@@ -216,6 +217,7 @@ class DatasetHparams(Hparams):
         "Add non-isotropic noise augmentation to the dataset during training"
     )
     _N_mixup: str = "Mixup the dataset with non-isotropic projection"
+    _mixup: str = "Mixup the dataset with standard mixup"
 
 
 @dataclass
@@ -293,26 +295,18 @@ class TrainingHparams(Hparams):
 class TestingHparams(Hparams):
     standard_eval: bool = False
     adv_eval: bool = False
-    lipschitz_eval: bool = False
-    security_eval: bool = False
-    adv_test_attack_type: str = "best_possible"
+    N_adv_eval: bool = False
     adv_test_attack_norm: str = "2"
-    adv_test_num_trials: int = 10
-    lipschitz_estimator_type: str = "all"
-    security_curve_bins: int = 40
+    adv_attack_size_l2: float = 1.5
+    adv_attack_size_linf: float = 8 / 255
 
     _name: str = "Testing Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is tested."
     _standard_eval: str = (
         "If True, computes standard accuracy of the trained/checkpointed model"
     )
-    _adv_eval: str = "If True, computes robust accuracy and best_adversarial examples for the trained/checkpointed model under attack specified by adv_test_attack_type"
-    _lipschitz_eval: str = "If True, computes certified radius of trained/checkpointed model according to the estimator specified by lipschitz_estimator_type"
-    _security_eval: str = "If True, compares understimation via lipschitz estimators vrs overestimation via adversarial attacks"
-    _adv_test_attack_type: str = "Type of adversarial attack to employ for inference"
+    _adv_eval: str = "If True, computes robust accuracy for the trained/checkpointed model under an isotropic attack specified by adv_test_attack_type"
+    _N_adv_eval: str = "If True, computes robust accuracy for the trained/checkpointed model under a non-isotropic attack specified by adv_test_attack_type"
     _adv_test_attack_norm: str = (
         "Norm of the adversarial attack - either ell_inf, ell_1 or ell_2"
     )
-    _adv_test_num_iter: str = "Number of indepedent trials of adversarial attack, picks the best out of number of trials for each attack"
-    _lipschitz_estimator_type: str = "If string = all, testing runner computes certified radius using all registerd estimators, else looks for the specific estimator"
-    _security_curve_bins: str = "Number of bins to make security curve evaluation"

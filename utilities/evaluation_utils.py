@@ -1,5 +1,5 @@
 import torch
-import math 
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -34,21 +34,30 @@ def correct(labels, output):
     return torch.sum(torch.eq(labels, output.argmax(dim=1)))
 
 
-def get_pointwise_margin(output, label):
-    # assuming x and y are for one point in the batch
-    return output[label] - torch.max(output[torch.arange(len(output)) != label.item()])
+def get_pointwise_margin(outputs, label):
+    return outputs[label] - torch.max(
+        outputs[torch.arange(len(outputs)) != label.item()]
+    )
 
 
-def get_soft_margin(model, batch_x, batch_y, Mrgs, Accs, Actual_Mrgs):
-    batch_output = model(batch_x)
-    num_examples = torch.tensor(len(batch_y), device=get_platform().torch_device).item()
+def get_soft_margin(model, examples, labels, max_margin):
+    num_bins = 100
+    num_examples = torch.tensor(len(labels), device=get_platform().torch_device).item()
+
+    accuracies = torch.zeros(num_bins)
+    actual_margins = torch.zeros(num_examples)
+
+    margin_thresholds = torch.linspace(0, max_margin, steps=num_bins)
+
+    outputs = model(examples)
+
     for index in range(0, num_examples):
-        out = batch_output[index, :]
-        Actual_Mrgs[index] = get_pointwise_margin(out, batch_y[index])
+        actual_margins[index] = get_pointwise_margin(outputs[index, :], labels[index])
 
-    for j in range(len(Accs)):
-        margin_threshold = Mrgs[j]
-        Accs[j] = torch.sum(Actual_Mrgs >= margin_threshold) / num_examples
+    for j in range(0, num_examples):
+        accuracies[j] = torch.sum(actual_margins >= margin_thresholds[j]) / num_examples
+
+    return accuracies, actual_margins
 
 
 def report_adv(model, examples, labels, delta):
