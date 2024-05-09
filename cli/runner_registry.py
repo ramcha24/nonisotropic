@@ -3,6 +3,7 @@ from training.runner import TrainingRunner
 from testing.runner import TestingRunner
 
 registered_runners = {"train": TrainingRunner, "test": TestingRunner}
+# i need two more runners - one that computes threats specification and one that downloads pretrained models
 
 
 def get(runner_name: str) -> Runner:

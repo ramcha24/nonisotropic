@@ -71,6 +71,7 @@ def main():
     runner_registry.get(runner_name).add_args(parser)
 
     args = parser.parse_args()
+    print(args)
     platform = platforms.registry.get(platform_name).create_from_args(args)
 
     if args.display_output_location:

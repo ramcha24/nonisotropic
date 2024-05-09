@@ -3,12 +3,12 @@ from collections import OrderedDict
 import timm
 from torchvision import models as pt_models
 
-from robustbench.model_zoo.enums import ThreatModel
-from robustbench.model_zoo.architectures.utils_architectures import normalize_model
-from robustbench.model_zoo.architectures import alexnet, xcit, deit  # needed to register models
-from robustbench.model_zoo.architectures.convstem_models import get_convstem_models
-from robustbench.model_zoo.architectures.robustarch_wide_resnet import get_model as get_robustarch_model
-from robustbench.model_zoo.architectures.comp_model import get_nonlin_mixed_classifier
+from models.model_zoo.enums import ThreatModel
+from models.architectures.utils_architectures import normalize_model
+from models.architectures import alexnet, xcit, deit  # needed to register models
+from models.architectures.convstem_models import get_convstem_models
+from models.architectures.robustarch_wide_resnet import get_model as get_robustarch_model
+from models.architectures.comp_model import get_nonlin_mixed_classifier
 
 
 mu = (0.485, 0.456, 0.406)
@@ -205,7 +205,6 @@ common_corruptions = OrderedDict(
         }),
     ])
 
-imagenet_models = OrderedDict([(ThreatModel.Linf, linf),
-                               (ThreatModel.corruptions, common_corruptions)])
+imagenet_models = OrderedDict([(ThreatModel.Linf, linf), (ThreatModel.corruptions, common_corruptions)])
 
 

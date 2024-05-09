@@ -24,7 +24,7 @@ from training.adv_train_util import get_attack
 from utilities.evaluation_utils import report_adv
 
 from threat_specification.projected_displacement import non_isotropic_projection
-from datasets.greedy_subset import load_greedy_subset
+from threat_specification.greedy_subset import load_greedy_subset
 
 
 def train(
