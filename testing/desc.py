@@ -1,6 +1,7 @@
 from dataclasses import dataclass, fields
 import os
 import argparse
+from typing import Optional
 
 from datasets import registry as datasets_registry
 from foundations import desc
@@ -13,9 +14,11 @@ from platforms.platform import get_platform
 class TestingDesc(desc.Desc):
     """the hyperparameters necessary to describe a testing run"""
 
-    model_hparams: hparams.ModelHparams
     dataset_hparams: hparams.DatasetHparams
-    training_hparams: hparams.TrainingHparams
+    augment_hparams: Optional[hparams.AugmentationHparams] = None
+    model_hparams: hparams.ModelHparams
+    pretraining_hparams: Optional[hparams.PretrainingHparams] = None
+    training_hparams: Optional[hparams.TrainingHparams] = None
     testing_hparams: hparams.TestingHparams
 
     @staticmethod
@@ -23,29 +26,54 @@ class TestingDesc(desc.Desc):
         return "test"
 
     @staticmethod
-    def add_args(parser: argparse.ArgumentParser, defaults: "TestingDesc" = None):
+    def add_args(
+        parser: argparse.ArgumentParser, defaults: "TestingDesc" = None, prefix=None
+    ):
         hparams.ModelHparams.add_args(
-            parser, defaults=defaults.model_hparams if defaults else None
+            parser, defaults=defaults.model_hparams if defaults else None, prefix=prefix
         )
         hparams.DatasetHparams.add_args(
-            parser, defaults=defaults.dataset_hparams if defaults else None
+            parser,
+            defaults=defaults.dataset_hparams if defaults else None,
+            prefix=prefix,
+        )
+        hparams.AugmentationHparams.add_args(
+            parser,
+            defaults=defaults.augment_hparams if defaults else None,
+            prefix=prefix,
+        )
+        hparams.PretrainingHparams.add_args(
+            parser,
+            defaults=defaults.dataset_hparams if defaults else None,
+            prefix=prefix,
         )
         hparams.TrainingHparams.add_args(
-            parser, defaults=defaults.training_hparams if defaults else None
+            parser,
+            defaults=defaults.training_hparams if defaults else None,
+            prefix=prefix,
         )
         hparams.TestingHparams.add_args(
-            parser, defaults=defaults.testing_hparams if defaults else None
+            parser,
+            defaults=defaults.testing_hparams if defaults else None,
+            prefix=prefix,
         )
 
     @staticmethod
     def create_from_args(args: argparse.Namespace) -> "TestingDesc":
         model_hparams = hparams.ModelHparams.create_from_args(args)
         dataset_hparams = hparams.DatasetHparams.create_from_args(args)
+        augment_hparams = hparams.AugmentationHparams.create_from_args(args)
+        pretraining_hparams = hparams.PretrainingHparams.create_from_args(args)
         training_hparams = hparams.TrainingHparams.create_from_args(args)
         testing_hparams = hparams.TestingHparams.create_from_args(args)
 
         return TestingDesc(
-            model_hparams, dataset_hparams, training_hparams, testing_hparams
+            model_hparams,
+            dataset_hparams,
+            augment_hparams,
+            pretraining_hparams,
+            training_hparams,
+            testing_hparams,
         )
 
     @property
@@ -55,19 +83,50 @@ class TestingDesc(desc.Desc):
     def run_path(self, replicate, verbose=False):
         root_location = get_platform().runner_root
 
-        dataset_str = self.get_dataset_name()
-        model_str = self.get_model_name()
-        if model_str.startswith("RB"):
-            train_runner_str = "finetuning"
-        else:
-            train_runner_str = "training"
-        # self.name_prefix()
+        dataset_name = self.get_dataset_name()
+        model_name = self.get_model_name()
+        model_type = self.model_hparams.model_type if self.model_hparams.model_type else None
+        model_source = self.model_hparams.model_source if self.model_hparams.model_source else None
+        threat_model = self.model_hparams.threat_model if self.model_hparams.threat_model else None
 
-        dataset_prefix = "data_"
-        if not (
-            self.dataset_hparams.gaussian_augment
-            or self.dataset_hparams.N_project
-            or self.dataset_hparams.N_mixup
+        logger_paths = dict()
+        logger_paths["base"] = os.path.join(root_location, dataset_name)
+        if model_type is not None:
+            logger_paths["pretrained"] = os.path.join(logger_paths["base"],"pretrained",model_source, threat_model)
+            if model_type == "pretrained":
+                test_prefix = "test_"
+                test_hash = self.hashname(type_str="test")
+                replicate_str = f"replicate_{replicate}"
+
+        
+
+            elif model_type != "finetuned":
+                raise ValueError(f"Invalid model type {model_type}")
+        else:
+            logger_paths["pretrained"] = logger_paths["base"]
+        
+        
+
+
+
+        if model_type is not None:
+            pretrain_root_str = "pretrained/robustbenchmark/Linf"
+            if self.training_hparams is not None:
+                # finetuned a pretrained model
+                train_runner_str = "finetuned"
+            else:
+                train_runner_str = ""
+        else:
+            assert self.training_hparams is not None
+            train_runner_str = "trained"
+        
+        if self.training_hparams is not None and self.augment_hparams is not None:
+
+            augment_prefix = "augment_"
+            if not (
+                self.dataset_hparams.gaussian_augment
+                or self.dataset_hparams.N_project
+                or self.dataset_hparams.N_mixup
         ):
             dataset_prefix += "std_"
         else:
@@ -143,7 +202,11 @@ class TestingDesc(desc.Desc):
             print("\nTesting hparams will be logged at {}".format(full_run_path))
 
         if not get_platform().exists(logger_paths["train_run_path"]) and verbose:
-            raise ValueError("\n No trained models found, Can't run test job~")
+            raise ValueError(
+                "\n No trained models found at {},\n Can't run test job~".format(
+                    logger_paths["train_run_path"]
+                )
+            )
 
         if not get_platform().exists(full_run_path) and verbose:
             print("A job with this configuration has not been run yet.")
@@ -155,8 +218,16 @@ class TestingDesc(desc.Desc):
         return "\n".join(
             [
                 self.dataset_hparams.display,
+                self.augment_hparams.display
+                if self.augment_hparams is not None
+                else "",
                 self.model_hparams.display,
-                self.training_hparams.display,
+                self.pretraining_hparams.display
+                if self.pretraining_hparams is not None
+                else "",
+                self.training_hparams.display
+                if self.training_hparams is not None
+                else "",
                 self.testing_hparams.display,
             ]
         )

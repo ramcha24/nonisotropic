@@ -13,7 +13,6 @@ class ForwardHookModel(nn.Module):
         self.selected_out.keys()
 
         for index, layer_name in enumerate(list(self.pretrained._modules.keys())):
-            # print('\n index : {} \t layer name : {}'.format(index, layer_name))
             if index in self.output_layers:
                 self.fhooks.append(
                     getattr(self.pretrained, layer_name).register_forward_hook(self.forward_hook(layer_name)))

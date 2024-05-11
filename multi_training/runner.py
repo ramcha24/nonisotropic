@@ -10,23 +10,21 @@ from training.desc import TrainingDesc
 
 
 @dataclass
-class TrainingRunner(Runner):
+class MultiTrainingRunner(Runner):
     replicate: int
     desc: TrainingDesc
     verbose: bool = True
     evaluate_every_epoch: bool = True
     evaluate_every_few_epoch: int = 10
-    num_sub_runners: int = 1
 
     @staticmethod
     def description():
-        return "Train a model."
+        return "Train or finetune multiple models."
 
     @staticmethod
     def add_args(parser: argparse.ArgumentParser) -> None:
         # shared_args.JobArgs.add_args(parser)
-        print("Inside training runner")
-        # print(parser.parse_args())
+        print(parser.parse_args())
         # store the list of hparams from maybe_get_default_hparams
         # do add_args for each training/testing desc in list(Desc)
         TrainingDesc.add_args(
@@ -43,9 +41,6 @@ class TrainingRunner(Runner):
             not args.quiet,
             not args.evaluate_only_at_end,
         )
-
-    def num_sub_runners(self) -> int:
-        return self.num_sub_runners
 
     def display_output_location(self):
         # here list all the different output locations for each desc in list(desc)

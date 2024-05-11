@@ -67,10 +67,6 @@ class Model(base.Model):
     def forward(self, x):
         return self.model(x)
 
-    @property
-    def output_layer_names(self):
-        return ["model.fc.weight", "model.fc.bias"]
-
     @staticmethod
     def is_valid_model_name(model_name):
         return (
@@ -146,7 +142,7 @@ class Model(base.Model):
 
         dataset_hparams = hparams.DatasetHparams(
             dataset_name="imagenet",
-            batch_size=128,
+            batch_size=50,
             num_labels=1000,
             num_channels=3,
             num_spatial_dims=224,

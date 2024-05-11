@@ -6,44 +6,41 @@ from foundations.runner import Runner
 import models.registry
 from platforms.platform import get_platform
 
-from testing import test
-from testing.desc import TestingDesc
+from multi_testing import multi_test
+from multi_testing.desc import MultiTestingDesc
 
 
 @dataclass
-class TestingRunner(Runner):
+class MultiTestingRunner(Runner):
     replicate: int
-    desc: TestingDesc
+    multi_desc: MultiTestingDesc
     verbose: bool = True
     evaluate_batch_only: bool = True
-    num_sub_runners: int = 1
+    num_sub_runners: int = 16
 
     @staticmethod
     def description():
-        return "Test a trained model."
+        return "Test multiple models."
 
     @staticmethod
     def add_args(parser: argparse.ArgumentParser) -> None:
         # shared_args.JobArgs.add_args(parser)
-        TestingDesc.add_args(
-            parser, shared_args.maybe_get_default_hparams(runner_name="test")
-        )
+        defaults_list = shared_args.maybe_get_default_hparams(runner_name="multi_test")
+        MultiTestingDesc.add_args(parser, defaults_list)
 
     @staticmethod
-    def create_from_args(args: argparse.Namespace) -> "TestingRunner":
-        return TestingRunner(
+    def create_from_args(args: argparse.Namespace) -> "MultiTestingRunner":
+        return MultiTestingRunner(
             args.replicate,
-            TestingDesc.create_from_args(args),
+            MultiTestingDesc.create_from_args(args),
             not args.quiet,
             args.evaluate_only_batch_test,
         )
 
-    def num_sub_runners(self) -> int:
-        return self.num_sub_runners
-
     def display_output_location(self):
-        full_run_path, _ = self.desc.run_path(self.replicate, verbose=self.verbose)
-        print("\n Output Location : " + full_run_path)
+        for desc in self.multi_desc.desc_list:
+            full_run_path, _ = desc.run_path(self.replicate, verbose=self.verbose)
+            print("\n Output Location for subrunner : " + full_run_path)
         # print(self.desc.run_path(self.replicate))
 
     def run(self):

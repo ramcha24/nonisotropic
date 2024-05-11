@@ -9,12 +9,6 @@ from foundations import paths
 from platforms.platform import get_platform
 
 
-def printdict(item):
-    pp = pprint.PrettyPrinter(indent=4, width=10)
-    pp.pprint(item)
-    return
-
-
 @dataclass
 class Desc(abc.ABC):
     """The bundle of hyperparameters necessary for a particular kind of job. Contains many hparams objects.
@@ -50,15 +44,20 @@ class Desc(abc.ABC):
             raise ValueError("Model name is not set")
         else:
             model_name = ""
-            for item in self.model_hparams.model_name.split("_")[1:]:
-                model_name += str(item)
-            return model_name
+            if self.pretraining_hparams is None:
+                for item in self.model_hparams.model_name.split("_")[1:]:
+                    model_name += str(item)
+                return model_name
+            else:
+                return self.model_hparams.model_name.split("_")[1:]
 
     def get_hparams_str(self, type_str):
         hparams_strs = None
 
         if type_str == "data":
             hparams_strs = self.class_select(hparams.DatasetHparams)
+        elif type_str == "augment":
+            hparams_strs = self.class_select(hparams.AugmentationHparams)
         elif type_str == "model":
             hparams_strs = self.class_select(hparams.ModelHparams)
         elif type_str == "train":

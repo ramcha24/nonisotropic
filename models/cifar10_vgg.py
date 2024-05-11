@@ -48,10 +48,6 @@ class Model(base.Model):
         x = self.fc(x)
         return x
 
-    @property
-    def output_layer_names(self):
-        return ["fc.weight", "fc.bias"]
-
     @staticmethod
     def is_valid_model_name(model_name):
         return (
@@ -137,7 +133,8 @@ class Model(base.Model):
             dataset_name="cifar10",
             batch_size=128,
             num_labels=10,
-            input_shape=(3, 32, 32),
+            num_channels=3,
+            num_spatial_dims=32,
         )
 
         training_hparams = hparams.TrainingHparams(

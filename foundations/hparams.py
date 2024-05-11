@@ -86,6 +86,11 @@ class Hparams(abc.ABC):
                 )
 
             elif isinstance(field.type, type) and issubclass(field.type, Hparams):
+                print(
+                    "\n Adding args for {} with type {} and prefix is {}".format(
+                        field, field.type, prefix
+                    )
+                )
                 subprefix = f"{prefix}_{field.name}" if prefix else field.name
                 field.type.add_args(
                     parser, defaults=default, prefix=subprefix, create_group=False
@@ -167,14 +172,15 @@ class DatasetHparams(Hparams):
     random_labels_fraction: float = None
     unsupervised_labels: str = None
     blur_factor: int = None
-    gaussian_augment: bool = False
-    gaussian_aug_mean: float = 0.0
-    gaussian_aug_std: float = 1.0
-    greedy_per_label: int = 50
-    N_threshold: float = 0.2
-    N_project: bool = False
-    N_mixup: bool = False
-    mixup: bool = False
+    # gaussian_augment: bool = False
+    # gaussian_aug_mean: float = 0.0
+    # gaussian_aug_std: float = 1.0
+    # greedy_per_label: int = 50
+    # N_threshold: float = 0.4
+    # N_project: bool = False
+    # N_mixup: bool = False
+    # mixup: bool = False
+    # augmentation_frequency: int = 3
 
     _name: str = "Dataset Hyperparameters"
     _description: str = "Hyperparameters that select the dataset, data augmentation, and other data transformations."
@@ -202,6 +208,37 @@ class DatasetHparams(Hparams):
     _blur_factor: str = (
         "Blur the training set by downsampling and then upsampling by this multiple."
     )
+    # _gaussian_augment: str = (
+    #     "Add gaussian noise augmentation to the dataset during training"
+    # )
+    # _gaussian_aug_mean: str = (
+    #     "Mean of added gausian noise, ignored if gaussian_augment == False"
+    # )
+    # _gaussian_aug_std: str = (
+    #     "Std Deviation of added gaussian noise, ignored if gaussian_augment == False"
+    # )
+    # _greedy_per_label: str = "Number of points to select per label for greedy subset"
+    # _N_threshold: str = "Threshold for non-isotropic augmentation, ignored if non_isotropic_augment == False or non_isotropic_mixup == False"
+    # _N_project: str = (
+    #     "Add non-isotropic noise augmentation to the dataset during training"
+    # )
+    # _N_mixup: str = "Mixup the dataset with non-isotropic projection"
+    # _mixup: str = "Mixup the dataset with standard mixup"
+
+
+@dataclass
+class AugmentationHparams(Hparams):
+    augmentation_frequency: int = 3
+    gaussian_augment: bool = False
+    gaussian_aug_mean: float = 0.0
+    gaussian_aug_std: float = 1.0
+    greedy_per_label: int = 50
+    N_threshold: float = 0.4
+    N_project: bool = False
+    N_mixup: bool = False
+    mixup: bool = False
+
+    _augmentation_frequency: str = "How frequently should the training runner augment"
     _gaussian_augment: str = (
         "Add gaussian noise augmentation to the dataset during training"
     )
@@ -223,8 +260,11 @@ class DatasetHparams(Hparams):
 @dataclass
 class ModelHparams(Hparams):
     model_name: str
-    model_init: str
-    batchnorm_init: str
+    model_init: str = None
+    batchnorm_init: str = None
+    model_type: str = None  # or "pretrained" or "finetuned"
+    model_source: str = None  # or "robustbenchmark"
+    threat_model: str = None  # or "L_inf" or "L2"
 
     _name: str = "Model Hyperparameters"
     _description: str = (
@@ -235,13 +275,22 @@ class ModelHparams(Hparams):
     )
     _model_init: str = "The model initializer. Examples: kaiming_normal, kaiming_uniform, binary, orthogonal"
     _batchnorm_init: str = "The batchnorm initializer. Examples: uniform, fixed"
+    _model_type: str = "Type of models - pretrained / finetuned / regular (None)"  # _pretrained: str = "Is the model pretrained?"
+    _model_source: str = "Source of models if pretrained initially (or None) "
+    _threat_model: str = "Type of adversarial threat used in pretrained (or None) "
+
+
+@dataclass
+class PretrainingHparams(Hparams):
+    # currently only allowing robustbenchmark pretrained models
+    threat_model: str = None
 
 
 @dataclass
 class TrainingHparams(Hparams):
-    optimizer_name: str
-    lr: float
-    training_steps: str
+    optimizer_name: str = "sgd"
+    lr: float = "0.1"
+    training_steps: str = "40ep"
     data_order_seed: int = None
     momentum: float = 0.0
     nesterov_momentum: float = 0.0
@@ -254,8 +303,8 @@ class TrainingHparams(Hparams):
     adv_train_attack_norm: str = "2"
     adv_train_attack_power: float = 1.5
     adv_train_attack_iter: int = 20
-    adv_train_start_epoch: int = 20
-    N_threshold: float = 0.2
+    adv_train_start_epoch: int = 30
+    N_threshold: float = 0.4
     N_adv_train: bool = False
 
     _name: str = "Training Hyperparameters"

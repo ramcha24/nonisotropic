@@ -4,6 +4,7 @@ import typing
 
 from foundations import paths
 from foundations.step import Step
+from foundations import hparams
 import training.desc
 from platforms.platform import get_platform
 
@@ -29,17 +30,17 @@ class Model(torch.nn.Module, abc.ABC):
 
         pass
 
-    @property
+    @staticmethod
     @abc.abstractmethod
-    def output_layer_names(self) -> typing.List[str]:
-        """A list of the names of the Tensors of the output layer of this model."""
+    def default_model_hparams() -> "hparams.ModelHparams":
+        """The default model hyperparameters for this model."""
 
         pass
 
     @staticmethod
     @abc.abstractmethod
-    def default_hparams() -> "training.desc.TrainingDesc":
-        """The default hyperparameters for training this model and running lottery ticket."""
+    def default_training_hparams() -> "hparams.TrainingHparams":
+        """The default training hyperparameters for training this model."""
 
         pass
 
@@ -60,43 +61,11 @@ class Model(torch.nn.Module, abc.ABC):
         )
 
 
-class DataParallel(Model, torch.nn.DataParallel):
-    def __init__(self, module: Model):
-        super(DataParallel, self).__init__(module=module)
-
-    @property
-    def output_layer_names(self):
-        return self.module.output_layer_names
-
-    @property
-    def loss_criterion(self):
-        return self.module.loss_criterion
-
-    @staticmethod
-    def get_model_from_name(model_name, outputs, initializer):
-        raise NotImplementedError
-
-    @staticmethod
-    def is_valid_model_name(model_name):
-        raise NotImplementedError
-
-    @staticmethod
-    def default_hparams():
-        raise NotImplementedError
-
-    def save(self, save_location: str, save_step: Step):
-        self.module.save(save_location, save_step)
-
-
 class DistributedDataParallel(Model, torch.nn.parallel.DistributedDataParallel):
     def __init__(self, module: Model, device_ids):
         super(DistributedDataParallel, self).__init__(
             module=module, device_ids=device_ids
         )
-
-    @property
-    def output_layer_names(self):
-        return self.module.output_layer_names
 
     @property
     def loss_criterion(self):

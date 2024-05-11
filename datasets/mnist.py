@@ -4,6 +4,7 @@ import torchvision
 
 from datasets import base
 from platforms.platform import get_platform
+from foundations import hparams
 
 from six.moves import urllib
 
@@ -45,6 +46,18 @@ class Dataset(base.ImageDataset):
             download=True,
         )
         return Dataset(test_set.data, test_set.targets)
+
+    @staticmethod
+    def default_dataset_hparams() -> "hparams.DatasetHparams":
+        return hparams.DatasetHparams(
+            dataset_name="mnist",
+            batch_size=128,
+            num_labels=10,
+            num_channels=1,
+            num_spatial_dims=28,
+            num_train=60000,
+            num_test=10000,
+        )
 
     def __init__(self, examples, labels):
         tensor_transforms = [torchvision.transforms.Normalize(mean=[0.0], std=[1.0])]

@@ -5,6 +5,7 @@ import torch
 import torchvision
 from torch.utils.data import DataLoader as DLoader
 from platforms.platform import get_platform
+from foundations import hparams
 
 
 class Dataset(torch.utils.data.Dataset, abc.ABC):
@@ -33,6 +34,11 @@ class Dataset(torch.utils.data.Dataset, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def get_test_set() -> "Dataset":
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def default_dataset_hparams() -> "hparams.DatasetHparams":
         pass
 
     def __init__(self, examples: np.ndarray, labels):

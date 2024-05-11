@@ -71,7 +71,7 @@ def save_greedy_partition(dataset_hparams, per_label):
 
         torch.save(
             greedy_class_partition_first_half,
-            dir_path + "first_half_" + str(label) + ".pt",
+            dir_path + "greedy_partition_first_half_" + str(label) + ".pt",
         )
 
         torch.save(
@@ -84,8 +84,8 @@ def save_greedy_partition(dataset_hparams, per_label):
 def load_greedy_partition(
     per_label, num_labels, input_shape, label=None, dataset_loc=None
 ):
-    greedy_root = dataset_loc + "/train/greedy"
-    dir_path = greedy_root + "/per_label_" + str(per_label)
+    dir_path = os.path.join(dataset_loc, "per_label_" + str(per_label))
+
     if not get_platform().exists(dir_path):
         raise FileNotFoundError("Greedy subsets not found at " + dir_path)
 
@@ -119,13 +119,15 @@ def load_greedy_partition(
 
 def load_greedy_subset(dataset_hparams):
     dataset_loc = os.path.join(
-        get_platform().dataset_root, dataset_hparams.dataset_name
+        get_platform().threat_specification_root, dataset_hparams.dataset_name
     )
-    input_shape = [dataset_hparams.num_channels] + [
-        dataset_hparams.num_spatial_dims
-    ] * 2
+    input_shape = [
+        dataset_hparams.num_channels,
+        dataset_hparams.num_spatial_dims,
+        dataset_hparams.num_spatial_dims,
+    ]
     per_label = dataset_hparams.greedy_per_label
-    num_labels = (dataset_hparams.num_labels,)
+    num_labels = dataset_hparams.num_labels
     (first_half, second_half) = load_greedy_partition(
         per_label,
         num_labels,

@@ -2,11 +2,13 @@ import argparse
 import sys
 import os
 
-from cli import runner_registry
-from cli import arg_utils
+from cli import runner_registry, shared_args, arg_utils
 import platforms.registry
 from torch.distributed import init_process_group, destroy_process_group
 import torch
+
+
+from dataclasses import dataclass, fields, MISSING
 
 
 def main():
@@ -16,8 +18,7 @@ def main():
         + "\n Non-isotropic Robustness : Measuring adversarial robustness against non-isotropic threat specifications\n"
         + "-" * 100
     )
-    # TO DO.. configure to run multiple jobs in serial/parallel. Or perhaps use hydra.
-
+    
     # choose an initial command
     helptext = welcome + "\n Choose a command to run:"
     for name, runner in runner_registry.registered_runners.items():
@@ -60,7 +61,6 @@ def main():
             "\nLocal rank environment variable indicates a distributed job but the chosen platform is local. Try setting --platform distributed or ignore --platform argument when running with torchrun launcher\n"
         )
         sys.exit(1)
-
     if platform_name and platform_name in platforms.registry.registered_platforms:
         platforms.registry.get(platform_name).add_args(parser)
     else:
@@ -68,10 +68,11 @@ def main():
         sys.exit(1)
 
     # Add the arguments for various runners
+    shared_args.JobArgs.add_args(parser)
+
     runner_registry.get(runner_name).add_args(parser)
 
     args = parser.parse_args()
-    print(args)
     platform = platforms.registry.get(platform_name).create_from_args(args)
 
     if args.display_output_location:

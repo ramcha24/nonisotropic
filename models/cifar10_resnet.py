@@ -3,8 +3,6 @@ import torch.nn.functional as F
 
 from foundations import hparams
 from models import base
-from training.desc import TrainingDesc
-from testing.desc import TestingDesc
 
 
 class Model(base.Model):
@@ -77,12 +75,10 @@ class Model(base.Model):
         out = self.fc(out)
         return out
 
-    @property
-    def output_layer_names(self):
-        return ["fc.weight", "fc.bias"]
-
     @staticmethod
-    def is_valid_model_name(model_name):
+    def is_valid_model_name(model_name, dataset_name, threat_model=None):
+        assert threat_model is None
+        assert dataset_name == "cifar10"
         return (
             model_name.startswith("cifar10_resnet_")
             and 5 > len(model_name.split("_")) > 2
@@ -129,22 +125,35 @@ class Model(base.Model):
         return self.criterion
 
     @staticmethod
-    def default_hparams(runner_name):
-        model_hparams = hparams.ModelHparams(
-            model_name="cifar10_resnet_20",
+    def default_model_hparams(
+        model_name=None, dataset_name=None, threat_model=None, model_type=None
+    ):
+        assert threat_model is None
+        assert model_type is None
+        if not Model.is_valid_model_name(model_name, dataset_name):
+            raise ValueError("Invalid model name: {}".format(model_name))
+
+        return hparams.ModelHparams(
+            model_name=model_name,
             model_init="kaiming_normal",
             batchnorm_init="uniform",
         )
 
-        dataset_hparams = hparams.DatasetHparams(
-            dataset_name="cifar10",
-            batch_size=256,
-            num_labels=10,
-            num_channels=3,
-            num_spatial_dims=32,
-        )
+    @staticmethod
+    def default_training_hparams(
+        model_name=None, dataset_name=None, threat_model=None, model_type=None
+    ):
+        assert (
+            model_type is None
+        ), "No default training hparams for invalid model_type : {}".format(model_type)
+        assert (
+            threat_model is None
+        ), "No default training hparams for invalid model_type : {}".format(model_type)
 
-        training_hparams = hparams.TrainingHparams(
+        if not Model.is_valid_model_name(model_name, dataset_name):
+            raise ValueError("Invalid model name: {}".format(model_name))
+
+        return hparams.TrainingHparams(
             optimizer_name="sgd",
             momentum=0.9,
             milestone_steps="80ep,120ep",
@@ -153,18 +162,3 @@ class Model(base.Model):
             weight_decay=1e-4,
             training_steps="160ep",
         )
-
-        testing_hparams = hparams.TestingHparams()
-
-        if runner_name == "train":
-            return TrainingDesc(model_hparams, dataset_hparams, training_hparams)
-        elif runner_name == "test":
-            return TestingDesc(
-                model_hparams, dataset_hparams, training_hparams, testing_hparams
-            )
-        else:
-            raise ValueError(
-                "Cannot supply default hparams for an invalid runner - {}".format(
-                    runner_name
-                )
-            )

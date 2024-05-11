@@ -37,10 +37,6 @@ class Model(base.Model):
 
         return self.fc(x)
 
-    @property
-    def output_layer_names(self):
-        return ["fc.weight", "fc.bias"]
-
     @staticmethod
     def is_valid_model_name(model_name):
         return (
@@ -82,7 +78,8 @@ class Model(base.Model):
             dataset_name="mnist",
             batch_size=128,
             num_labels=10,
-            input_shape=(1, 28, 28),
+            num_channels=1,
+            num_spatial_dims=28,
         )
 
         training_hparams = hparams.TrainingHparams(

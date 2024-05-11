@@ -25,14 +25,19 @@ class Runner(abc.ABC):
 
         pass
 
-    @staticmethod
+    # @staticmethod
     @abc.abstractmethod
     def display_output_location(self) -> None:
         """Print the output location for the job."""
 
         pass
 
-    @staticmethod
+    @abc.abstractmethod
+    def num_sub_runners(self) -> int:
+        """Print the number of sub-runners if this class represents a collection of runners"""
+        pass
+
+    # @staticmethod
     @abc.abstractmethod
     def run(self) -> None:
         """Run the job."""

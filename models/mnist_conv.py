@@ -46,22 +46,15 @@ class Model(base.Model):
         x = self.fc(x)
         return x
 
-    @property
-    def output_layer_names(self):
-        return ["fc.weight", "fc.bias"]
-
     @staticmethod
     def is_valid_model_name(model_name):
-        # length = len(model_name.split('_'))
-
+        
         return (
             model_name.startswith("mnist_conv")
             and len(model_name.split("_")) > 2
             and all([x.isdigit() and int(x) > 0 for x in model_name.split("_")[2:]])
         )
-        #        length > 2 and
-        #       [x.isdigit() for x in model_name.split('_')[2:]] == [True]*(length - 2))
-
+        
     @staticmethod
     def get_model_from_name(model_name, initializer, outputs=10):
         if not Model.is_valid_model_name(model_name):
@@ -88,7 +81,8 @@ class Model(base.Model):
             dataset_name="mnist",
             batch_size=128,
             num_labels=10,
-            input_shape=(1, 28, 28),
+            num_channels=1,
+            num_spatial_dims=28,
         )
 
         training_hparams = hparams.TrainingHparams(

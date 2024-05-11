@@ -101,5 +101,17 @@ class Dataset(base.ImageDataset):
         with get_platform().open(example, "rb") as fp:
             return Image.open(fp).convert("RGB")
 
+    @staticmethod
+    def default_dataset_hparams() -> "hparams.DatasetHparams":
+        return hparams.DatasetHparams(
+            dataset_name="imagenet",
+            batch_size=64,
+            num_labels=1000,
+            num_channels=3,
+            num_spatial_dims=224,
+            num_train=1281167,
+            num_test=50000,
+        )
+
 
 DataLoader = base.DataLoader

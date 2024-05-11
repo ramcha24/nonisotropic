@@ -14,9 +14,8 @@ from platforms.platform import get_platform
 class TrainingDesc(desc.Desc):
     """The hyperparameters necessary to describe a training run"""
 
-    dataset_hparams: hparams.DatasetHparams
-    augment_hparams: hparams.AugmentationHparams
     model_hparams: hparams.ModelHparams
+    dataset_hparams: hparams.DatasetHparams
     training_hparams: hparams.TrainingHparams
 
     @staticmethod
@@ -28,9 +27,6 @@ class TrainingDesc(desc.Desc):
         hparams.DatasetHparams.add_args(
             parser, defaults=defaults.dataset_hparams if defaults else None
         )
-        hparams.AugmentationHparams.add_args(
-            parser, defaults=defaults.augment_hparams if defaults else None
-        )
         hparams.ModelHparams.add_args(
             parser, defaults=defaults.model_hparams if defaults else None
         )
@@ -41,13 +37,10 @@ class TrainingDesc(desc.Desc):
     @staticmethod
     def create_from_args(args: argparse.Namespace) -> "TrainingDesc":
         dataset_hparams = hparams.DatasetHparams.create_from_args(args)
-        augment_hparams = hparams.AugmentationHparams.create_from_args(args)
         model_hparams = hparams.ModelHparams.create_from_args(args)
         training_hparams = hparams.TrainingHparams.create_from_args(args)
 
-        return TrainingDesc(
-            dataset_hparams, augment_hparams, model_hparams, training_hparams
-        )
+        return TrainingDesc(model_hparams, dataset_hparams, training_hparams)
 
     @property
     def end_step(self):
@@ -70,21 +63,21 @@ class TrainingDesc(desc.Desc):
         else:
             runner_str = self.name_prefix()
 
-        augment_prefix = "data_"
+        dataset_prefix = "data_"
         if not (
-            self.augment_hparams.gaussian_augment
-            or self.augment_hparams.N_project
-            or self.augment_hparams.N_mixup
+            self.dataset_hparams.gaussian_augment
+            or self.dataset_hparams.N_project
+            or self.dataset_hparams.N_mixup
         ):
-            augment_prefix += "std_"
+            dataset_prefix += "std_"
         else:
-            if self.augment_hparams.gaussian_augment:
-                augment_prefix += "gaussian_"
-            if self.augment_hparams.N_project:
-                augment_prefix += "Nproject_"
-            if self.augment_hparams.N_mixup:
-                augment_prefix += "Nmixup_"
-        augment_hash = self.hashname(type_str="augment")
+            if self.dataset_hparams.gaussian_augment:
+                dataset_prefix += "gaussian_"
+            if self.dataset_hparams.N_project:
+                dataset_prefix += "Nproject_"
+            if self.dataset_hparams.N_mixup:
+                dataset_prefix += "Nmixup_"
+        dataset_hash = self.hashname(type_str="data")
 
         model_prefix = "model_"
         model_hash = self.hashname(type_str="model")
@@ -102,12 +95,12 @@ class TrainingDesc(desc.Desc):
         replicate_str = f"replicate_{replicate}"
 
         logger_paths = dict()
-        logger_paths["augment"] = os.path.join(
+        logger_paths["data"] = os.path.join(
             root_location,
             dataset_str,
             model_str,
             runner_str,
-            augment_prefix + augment_hash,
+            dataset_prefix + dataset_hash,
         )
 
         logger_paths["model"] = os.path.join(
@@ -124,7 +117,7 @@ class TrainingDesc(desc.Desc):
         )
 
         if get_platform().is_primary_process and verbose:
-            print("\nAugment hparams will be logged at {}".format(logger_paths["augment"]))
+            print("\nDataset hparams will be logged at {}".format(logger_paths["data"]))
             print("\nModel hparams will be logged at {}".format(logger_paths["model"]))
             print(
                 "\nTraining hparams will be logged at {}".format(logger_paths["train"])
@@ -140,7 +133,6 @@ class TrainingDesc(desc.Desc):
         return "\n".join(
             [
                 self.dataset_hparams.display,
-                self.augment_hparams.display,
                 self.model_hparams.display,
                 self.training_hparams.display,
             ]

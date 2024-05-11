@@ -101,7 +101,7 @@ def add_substr_to_state_dict(state_dict, substr):
 
 def load_model(
     model_name: str,
-    model_dir: Union[str, Path] = "./models/pretrained",
+    model_dir: Union[str, Path] = "./runner_data/",
     dataset: Union[str, BenchmarkDataset] = BenchmarkDataset.cifar_10,
     threat_model: Union[str, ThreatModel] = ThreatModel.Linf,
     custom_checkpoint: str = "",
@@ -146,7 +146,11 @@ def load_model(
         ).eval()
 
     model_dir_ = (
-        Path(model_dir) / dataset_.value / "robustbenchmark" / threat_model_.value
+        Path(model_dir)
+        / dataset_.value
+        / "pretrained"
+        / "robustbenchmark"
+        / threat_model_.value
     )
     model_path = model_dir_ / f"{model_name}.pt"
 
@@ -672,7 +676,7 @@ def parse_args():
     parser.add_argument(
         "--data_dir",
         type=str,
-        default="./data",
+        default="./datasets",
         help="where to store downloaded datasets",
     )
     parser.add_argument(
@@ -684,7 +688,7 @@ def parse_args():
     parser.add_argument(
         "--model_dir",
         type=str,
-        default="./models",
+        default="./runner_data",
         help="where to store downloaded models",
     )
     parser.add_argument("--seed", type=int, default=0, help="random seed")
