@@ -16,7 +16,6 @@ from testing.desc import TestingDesc
 class JobArgs(hparams.Hparams):
     """Arguments shared across jobs"""
 
-    replicate: int = 1
     dataset_name: str = None
     model_name: str = None
     quiet: bool = False
@@ -27,10 +26,6 @@ class JobArgs(hparams.Hparams):
     _name: str = "High-level arguments"
     _description: str = (
         "Arguments that determine how the job is run and where it is stored."
-    )
-    _replicate: str = (
-        "The index of this particular replicate. "
-        "Use a different replicate number to run another copy of the same experiment"
     )
     _dataset_name: str = "Name of the dataset to use for this job"
     _model_name: str = (
@@ -43,6 +38,23 @@ class JobArgs(hparams.Hparams):
     _evaluate_only_batch_test: str = (
         "Run the test runner only on a random batch of the test set"
     )
+
+
+@dataclass
+class ToggleArgs(hparams.Hparams):
+    toggle_N_aug: bool = False
+    toggle_mixup: bool = False
+    toggle_adv_train: bool = False
+    toggle_N_adv_train: bool = False
+
+    _name: str = "Multi runner toggle hyperparameters"
+    _description: str = (
+        "Toggle options for multi-runners based on boolean sub attributes"
+    )
+    _toggle_N_aug: str = "Toggle both non-isotropic augmentations"
+    _toggle_mixup: str = "Toggle mixup augmentation"
+    _toggle_adv_train: str = "Toggle adversarial training"
+    _toggle_N_adv_train: str = "Toggle non-isotropic adversarial training"
 
 
 def maybe_get_default_hparams(runner_name: str = None):
@@ -123,8 +135,6 @@ def maybe_get_default_hparams(runner_name: str = None):
                 threat_model == "Linf"
             ), "For multi_test runner with model_type : {}, currently only Linf threat_model is supported."
 
-            pretraining_hparams = hparams.PretrainingHparams(threat_model=threat_model)
-
             testing_hparams = hparams.TestingHparams()
 
             selected_model_names = rb_registry[dataset_name][threat_model]
@@ -149,7 +159,6 @@ def maybe_get_default_hparams(runner_name: str = None):
                     test_desc = TestingDesc(
                         dataset_hparams,
                         augment_hparams,
-                        pretraining_hparams,
                         model_hparams,
                         training_hparams,
                         testing_hparams,
@@ -158,7 +167,6 @@ def maybe_get_default_hparams(runner_name: str = None):
                 else:
                     test_desc = TestingDesc(
                         dataset_hparams,
-                        pretraining_hparams,
                         model_hparams,
                         testing_hparams,
                     )
@@ -172,10 +180,3 @@ def maybe_get_default_hparams(runner_name: str = None):
                 runner_name
             )
         )
-
-
-def get_num_sub_runners(runner_name: str = None):
-    if runner_name in ["train", "test"]:
-        return 1
-    elif runner_name in ["multi_train", "multi_test"]:
-        pass  # if model_type = arg_utils.maybe_get_arg("model_type")

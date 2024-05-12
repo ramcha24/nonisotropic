@@ -65,7 +65,8 @@ class Model(base.Model):
         self.criterion = nn.CrossEntropyLoss()
 
         # Initialize.
-        self.apply(initializer)
+        if initializer is not None:
+            self.apply(initializer)
 
     def forward(self, x):
         out = F.relu(self.bn(self.conv(x)))
@@ -88,7 +89,7 @@ class Model(base.Model):
         )
 
     @staticmethod
-    def get_model_from_name(model_name, initializer, outputs=10):
+    def get_model_from_name(model_name, dataset_name, initializer, outputs=10):
         """The naming scheme for a ResNet is 'cifar_resnet_N[_W]'.
 
         The ResNet is structured as an initial convolutional layer followed by three "segments"
@@ -107,7 +108,7 @@ class Model(base.Model):
         The name of the network would be 'cifar_resnet_20' or 'cifar_resnet_20_16'.
         """
 
-        if not Model.is_valid_model_name(model_name):
+        if not Model.is_valid_model_name(model_name, dataset_name):
             raise ValueError("Invalid model name: {}".format(model_name))
 
         name = model_name.split("_")

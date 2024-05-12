@@ -2,7 +2,9 @@ import argparse
 import sys
 import os
 
-from cli import runner_registry, shared_args, arg_utils
+from cli import runner_registry, arg_utils
+from cli.shared_args import JobArgs, ToggleArgs
+
 import platforms.registry
 from torch.distributed import init_process_group, destroy_process_group
 import torch
@@ -18,7 +20,7 @@ def main():
         + "\n Non-isotropic Robustness : Measuring adversarial robustness against non-isotropic threat specifications\n"
         + "-" * 100
     )
-    
+
     # choose an initial command
     helptext = welcome + "\n Choose a command to run:"
     for name, runner in runner_registry.registered_runners.items():
@@ -68,7 +70,10 @@ def main():
         sys.exit(1)
 
     # Add the arguments for various runners
-    shared_args.JobArgs.add_args(parser)
+    JobArgs.add_args(parser)
+
+    if runner_name.starts_with("multi"):
+        ToggleArgs.add_args(parser)
 
     runner_registry.get(runner_name).add_args(parser)
 

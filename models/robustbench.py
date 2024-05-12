@@ -44,6 +44,8 @@ class Model(base.Model):
         #threat_model = model_name.split("_")[0]
         # pretrained_model_name = model_name.split("_")[1] 
 
+        # WHAT ABOUT DATA PREPROCESSING
+
         pretrained_model = load_model(
             model_name=model_name,
             dataset=dataset_name,

@@ -42,25 +42,24 @@ class TestingRunner(Runner):
         return self.num_sub_runners
 
     def display_output_location(self):
-        full_run_path, _ = self.desc.run_path(self.replicate, verbose=self.verbose)
-        print("\n Output Location : " + full_run_path)
-        # print(self.desc.run_path(self.replicate))
+        logger_paths = self.desc.run_path(verbose=self.verbose)
+        print("\n Output Location : " + logger_paths["test_path"])
 
     def run(self):
-        full_run_path, logger_paths = self.desc.run_path(self.replicate)
+        logger_paths = self.desc.run_path()
 
-        train_run_path = logger_paths["train_run_path"]
+        train_run_path = logger_paths["train_path"]
+        full_run_path = logger_paths["test_path"]
         if self.verbose and get_platform().is_primary_process:
             print(
                 "=" * 82
-                + f"\n Testing a trained Model (Replicate {self.replicate})\n"
+                + f"\n Testing a trained Model (Replicate {self.desc.test_replicate})\n"
                 + "-" * 82
             )
             print(self.desc.display)
             print(f"Output Location: {full_run_path}/test\n" + "-" * 82 + "\n")
 
-        self.desc.save_param(self.replicate)
-        # self.desc.save(self.desc.run_path(self.replicate))
+        self.desc.save_param()
         test.standard_test(
             models.registry.get(self.desc.model_hparams),
             train_run_path,

@@ -1,7 +1,6 @@
 import abc
 import argparse
 from dataclasses import dataclass, fields
-import pprint
 import hashlib
 
 from foundations import hparams
@@ -77,6 +76,58 @@ class Desc(abc.ABC):
             :6
         ]  # shortening hash for ease, trade-off with collision factor.
         return hash_str
+
+    def model_hparams_dir(self):
+        model_prefix = None
+        model_hash = None
+        if self.model_hparams is not None:
+            model_prefix = "model_"
+            model_hash = self.hashname(type_str="model")
+        return model_prefix + model_hash
+
+    def train_hparams_dir(self):
+        train_prefix = None
+        train_hash = None
+        if self.training_hparams is not None:
+            train_prefix = "train_"
+            if not (
+                self.training_hparams.adv_train or self.training_hparams.N_adv_train
+            ):
+                train_prefix += "std_"
+            else:
+                if self.training_hparams.adv_train:
+                    train_prefix += "adv_"
+                if self.training_hparams.N_adv_train:
+                    train_prefix += "Nadv_"
+            train_hash = self.hashname(type_str="train")
+        return train_prefix + train_hash
+
+    def augment_hparams_dir(self):
+        augment_prefix = None
+        augment_hash = None
+        if self.augment_hparams is not None:
+            augment_prefix = "augment_"
+            if not (
+                self.augment_hparams.gaussian_augment
+                or self.augment_hparams.N_project
+                or self.augment_hparams.N_mixup
+            ):
+                augment_prefix += "std_"
+            else:
+                if self.augment_hparams.gaussian_augment:
+                    augment_prefix += "gaussian_"
+                if self.augment_hparams.N_project:
+                    augment_prefix += "Nproject_"
+                if self.augment_hparams.N_mixup:
+                    augment_prefix += "Nmixup_"
+            augment_hash = self.hashname(type_str="augment")
+        return augment_prefix + augment_hash
+
+    # def test_hparams_dir(self):
+    #     test_prefix = "test_"
+    #     if self.test_hparams is not None:
+    #         test_hash = self.hashname(type_str="test")
+    #         return
 
     @staticmethod
     @abc.abstractmethod

@@ -22,9 +22,7 @@ registered_models = [
 ]
 
 
-def get(model_hparams: ModelHparams, outputs=None):
-    """Get the model for the corresponding hyperparameters."""
-
+def get_initializer(model_hparams: ModelHparams):
     # select the initializer.
     model_init = model_hparams.model_init
     batchnorm_init = model_hparams.batchnorm_init
@@ -45,23 +43,51 @@ def get(model_hparams: ModelHparams, outputs=None):
         initializer(w)
         bn_initializer(w)
 
+    return init_fn
+
+
+def get(dataset_name, model_hparams: ModelHparams, outputs=None):
+    """Get the model for the corresponding hyperparameters."""
     # select the model.
-    model = None
-    for registered_model in registered_models:
-        if registered_model.is_valid_model_name(model_hparams.model_name):
-            model = registered_model.get_model_from_name(
-                model_hparams.model_name,
-                init_fn
-                if ((model_init is not None) and (batchnorm_init is not None))
-                else None,
-                outputs,
+    model_name = model_hparams.model_name
+    model_type = model_hparams.model_type
+    model_source = model_hparams.model_source
+    threat_model = model_hparams.threat_model
+
+    assert (
+        model_name is not None
+    ), "Cannot get model hparams without knowing the model name"
+
+    if model_type is None:
+        assert threat_model is None
+        assert model_source is None
+
+        for registered_model in registered_models:
+            if registered_model.is_valid_model_name(model_name, dataset_name):
+                init_fn = get_initializer(model_hparams)
+
+                model = registered_model.get_model_from_name(
+                    dataset_name,
+                    model_name,
+                    init_fn,
+                    outputs,
+                )
+                return model
+    else:
+        assert model_type in ["pretrained", "finetuned"]
+        assert (
+            model_source == "robustbenchmark"
+        ), "Currently only supporting robustbenchmark models for pretrained or finetuned model type."
+
+        if robustbench.Model.is_valid_model_name(
+            model_name, dataset_name, threat_model
+        ):
+            model = robustbench.Model.get_model_from_name(
+                model_name, dataset_name, threat_model
             )
-            break
+            return model
 
-    if model is None:
-        raise ValueError("No such model: {}".format(model_hparams.model_name))
-
-    return model
+    raise ValueError("No such model: {}".format(model_name))
 
 
 # def load(
@@ -77,14 +103,21 @@ def exists(save_location, save_step):
     return get_platform().exists(paths.model(save_location, save_step))
 
 
+def pretrained_exists(save_location):
+    # check if there is any .pt file.
+    pass
+
+
 def get_default_hparams(
     model_name, dataset_name, threat_model=None, model_type=None, param_str=None
 ):
+    """Get the default hyperparameters for a particular model."""
+
     assert param_str in ["model", "training"]
     assert (
         model_name is not None
     ), "Cannot get model hparams without knowing the model name"
-    """Get the default hyperparameters for a particular model."""
+
     if threat_model is None:
         assert model_type is None
         # retrieve default model hyper parameters for a regular model
@@ -99,7 +132,7 @@ def get_default_hparams(
                         model_name, dataset_name
                     )
                 return params
-    elif threat_model in ["Linf", "L2"]:
+    elif threat_model in ["Linf"]:
         assert model_type in ["pretrained", "finetuned"]
         # the presence of threat model indicates robust benchmark
         if robustbench.Model.is_valid_model_name(

@@ -3,6 +3,7 @@ import argparse
 import copy
 from dataclasses import dataclass, fields, MISSING
 from typing import Tuple
+import hashlib
 
 
 @dataclass
@@ -127,6 +128,31 @@ class Hparams(abc.ABC):
 
         return cls(**d)
 
+    @classmethod
+    def modified(cls, default_dict, modify_dict) -> "Hparams":
+        for field in fields(cls):
+            if field.type == bool and field.name in modify_dict.keys():
+                default_dict[field.name] == modify_dict[field.name]
+
+        return cls(**default_dict)
+
+    def dir_path(self, identifier_name: str = None, include_names=None):
+        if identifier_name is None:
+            assert self._name is not None
+            prefix = self._name.split(" ")[0].lower()
+        else:
+            prefix = getattr(self, "identifier_name")
+
+        for field in fields(self):
+            value = getattr(self, field.name)
+            if field.type == bool and value:
+                prefix += "_" + field.name.replace("_", "")
+            elif field.name in include_names and value:
+                prefix += "_" + str(value)
+
+        hash_str = hashlib.md5(";".join(self.__str__()).encode("utf-8")).hexdigest()[:6]
+        return prefix + hash_str
+
     @property
     def display(self):
         nondefault_fields = [
@@ -238,6 +264,8 @@ class AugmentationHparams(Hparams):
     N_mixup: bool = False
     mixup: bool = False
 
+    _name: str = "Augmentation Hyperparameters"
+    _description: str = "Hyperparameters that specify the kind of data augmentation to use while training/fine-tuning."
     _augmentation_frequency: str = "How frequently should the training runner augment"
     _gaussian_augment: str = (
         "Add gaussian noise augmentation to the dataset during training"
@@ -281,13 +309,8 @@ class ModelHparams(Hparams):
 
 
 @dataclass
-class PretrainingHparams(Hparams):
-    # currently only allowing robustbenchmark pretrained models
-    threat_model: str = None
-
-
-@dataclass
 class TrainingHparams(Hparams):
+    train_replicate: int = 1
     optimizer_name: str = "sgd"
     lr: float = "0.1"
     training_steps: str = "40ep"
@@ -300,7 +323,7 @@ class TrainingHparams(Hparams):
     weight_decay: float = None
     adv_train: bool = False
     adv_train_attack_type: str = "PGD"
-    adv_train_attack_norm: str = "2"
+    adv_train_attack_norm: str = "Linf"
     adv_train_attack_power: float = 1.5
     adv_train_attack_iter: int = 20
     adv_train_start_epoch: int = 30
@@ -315,6 +338,10 @@ class TrainingHparams(Hparams):
     _lr: str = "The learning rate"
     _training_steps: str = (
         "The number of steps to train as epochs ('160ep') or iterations ('50000it')."
+    )
+    _train_replicate: str = (
+        "The index of this particular replicate. "
+        "Use a different replicate number to run another copy of the same experiment"
     )
     _momentum: str = "The momentum to use with the SGD optimizer."
     _nesterov: str = "The nesterov momentum to use with the SGD optimizer. Cannot set both momentum and nesterov."
@@ -342,6 +369,7 @@ class TrainingHparams(Hparams):
 
 @dataclass
 class TestingHparams(Hparams):
+    test_replicate: int = 1
     standard_eval: bool = False
     adv_eval: bool = False
     N_adv_eval: bool = False
@@ -351,6 +379,10 @@ class TestingHparams(Hparams):
 
     _name: str = "Testing Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is tested."
+    _test_replicate: str = (
+        "The index of this particular replicate. "
+        "Use a different replicate number to run another copy of the same experiment"
+    )
     _standard_eval: str = (
         "If True, computes standard accuracy of the trained/checkpointed model"
     )

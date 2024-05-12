@@ -6,6 +6,8 @@ from foundations.runner import Runner
 import models.registry
 from platforms.platform import get_platform
 
+from testing.runner import TestingRunner
+
 from multi_testing import multi_test
 from multi_testing.desc import MultiTestingDesc
 
@@ -14,6 +16,7 @@ from multi_testing.desc import MultiTestingDesc
 class MultiTestingRunner(Runner):
     replicate: int
     multi_desc: MultiTestingDesc
+    # multi_run: list[TestingRunner]
     verbose: bool = True
     evaluate_batch_only: bool = True
     num_sub_runners: int = 16
@@ -37,33 +40,41 @@ class MultiTestingRunner(Runner):
             args.evaluate_only_batch_test,
         )
 
-    def display_output_location(self):
+    def create_sub_runners(self):
+        sub_runner_list = []
         for desc in self.multi_desc.desc_list:
+            sub_runner_list.append(
+                TestingRunner(
+                    self.replicate, desc, self.verbose, self.evaluate_batch_only
+                )
+            )
+        return sub_runner_list
+
+    def get_num_sub_runners(self):
+        return len(self.multi_desc.desc_list)
+
+    def display_output_location(self):
+        for desc_index, desc in enumerate(self.multi_desc.desc_list):
             full_run_path, _ = desc.run_path(self.replicate, verbose=self.verbose)
-            print("\n Output Location for subrunner : " + full_run_path)
-        # print(self.desc.run_path(self.replicate))
+            print(
+                "\n Output Location for subrunner {} : {} ".format(
+                    desc_index, full_run_path
+                )
+            )
 
     def run(self):
-        full_run_path, logger_paths = self.desc.run_path(self.replicate)
-
-        train_run_path = logger_paths["train_run_path"]
         if self.verbose and get_platform().is_primary_process:
             print(
                 "=" * 82
-                + f"\n Testing a trained Model (Replicate {self.replicate})\n"
+                + f"\n Multi-Testing with {self.get_num_sub_runners()} sub-runners (Replicate {self.replicate})\n"
                 + "-" * 82
             )
-            print(self.desc.display)
-            print(f"Output Location: {full_run_path}/test\n" + "-" * 82 + "\n")
 
-        self.desc.save_param(self.replicate)
-        # self.desc.save(self.desc.run_path(self.replicate))
-        test.standard_test(
-            models.registry.get(self.desc.model_hparams),
-            train_run_path,
-            full_run_path,
-            self.desc.dataset_hparams,
-            self.desc.testing_hparams,
-            verbose=self.verbose,
-            evaluate_batch_only=self.evaluate_batch_only,
-        )
+        sub_runner_list = self.create_sub_runner()
+        for sub_runner_index, sub_runner in enumerate(sub_runner_list):
+            print(
+                "=" * 82
+                + f"\n Testing Runner {sub_runner_index} (Replicate {self.replicate})\n"
+                + "-" * 82
+            )
+            sub_runner.run()

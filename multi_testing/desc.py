@@ -1,24 +1,29 @@
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, asdict, replace
 import os
 import argparse
+import json
+from itertools import product
+from collections import OrderedDict
 
 from datasets import registry as datasets_registry
-from foundations import desc
-from foundations import hparams
+from foundations.desc import Desc
+from foundations.hparams import (
+    DatasetHparams,
+    ModelHparams,
+    TrainingHparams,
+    AugmentationHparams,
+    TestingHparams,
+)
 from foundations import paths
 from platforms.platform import get_platform
 from testing.desc import TestingDesc
-import json
 
 
 @dataclass
-class MultiTestingDesc(desc.Desc):
+class MultiTestingDesc(Desc):
     """the hyperparameters necessary to describe a testing run"""
 
     desc_list: list[TestingDesc]
-    dataset: str = None
-    threat_model: str = None
-    model_type: str = None
 
     @staticmethod
     def name_prefix():
@@ -35,32 +40,6 @@ class MultiTestingDesc(desc.Desc):
         print(defaults_list[len(defaults_list) // 2])
         print("\n")
 
-        # the bit below should happen on its own via JobArgs
-        # dataset_arg_name = "--dataset"
-        # parser.add_argument(
-        #     dataset_arg_name,
-        #     type=str,
-        #     default=None,
-        #     required=True,
-        #     help="(required: str) --dataset",
-        # )
-        # threat_model_arg_name = "--threat_model"
-        # parser.add_argument(
-        #     threat_model_arg_name,
-        #     type=str,
-        #     default=None,
-        #     required=True,
-        #     help="(required: str) --threat_model",
-        # )
-        # model_type_arg_name = "--model_type"
-        # parser.add_argument(
-        #     model_type_arg_name,
-        #     type=str,
-        #     default=None,
-        #     required=True,
-        #     help="(required: str) --model_type",
-        # )
-
         for defaults_index, defaults in enumerate(defaults_list):
             TestingDesc.add_args(
                 parser,
@@ -72,52 +51,102 @@ class MultiTestingDesc(desc.Desc):
     @staticmethod
     def create_from_args(args: argparse.Namespace) -> "TestingDesc":
         index_list = list(range(16))
+        possible_augment_toggle_args = [
+            "N_aug",
+            "mixup",
+        ]
+        possible_training_toggle_args = [
+            "adv_train",
+            "N_adv_train",
+        ]
+
+        selected_augment_toggle_args = [False, False]
+        for (index, arg_name) in enumerate(possible_augment_toggle_args):
+            if getattr(args, "toggle_" + arg_name):
+                selected_augment_toggle_args[index] = True
+
+        selected_training_toggle_args = [False, False]
+        for (index, arg_name) in enumerate(possible_training_toggle_args):
+            if getattr(args, "toggle_" + arg_name):
+                selected_training_toggle_args[index] = True
+
+        num_augment_selected = sum(selected_augment_toggle_args)
+        num_training_selected = sum(selected_training_toggle_args)
+
+        toggle_choices = [True, False]
+
         desc_list = []
         for defaults_index in index_list:
             prefix_str = str("multi_test_") + str(defaults_index)
             if hasattr(args, prefix_str + "_model_name"):
-                model_hparams = hparams.ModelHparams.create_from_args(
+                model_hparams = ModelHparams.create_from_args(args, prefix=prefix_str)
+                dataset_hparams = DatasetHparams.create_from_args(
                     args, prefix=prefix_str
                 )
-                dataset_hparams = hparams.DatasetHparams.create_from_args(
+                testing_hparams = TestingHparams.create_from_args(
                     args, prefix=prefix_str
                 )
-                pretraining_hparams = hparams.PretrainingHparams.create_from_args(
-                    args, prefix=prefix_str
-                )
-                testing_hparams = hparams.TestingHparams.create_from_args(
-                    args, prefix=prefix_str
-                )
-                # model_type_arg_name = prefix_str + "_model_type")
-                # if not hasattr(args, model_type_arg_name):
-                #     raise ValueError(f"Missing argument: {model_type_arg_name}.")
-                # model_type = getattr(arg, model_type_arg_name).split("_")[2:]
-                if model_hparams.model_type == "finetuned":
-                    augment_hparams = hparams.AugmentationHparams.create_from_args(
-                        args, prefix=prefix_str
-                    )
-                    training_hparams = hparams.TrainingHparams.create_from_args(
-                        args, prefix=prefix_str
-                    )
+                model_type == model_hparams.model_type
+                if model_type == "pretrained":
+                    assert num_selected == 0
                     desc_list.append(
                         TestingDesc(
                             model_hparams,
                             dataset_hparams,
-                            augment_hparams,
-                            pretraining_hparams,
-                            training_hparams,
                             testing_hparams,
                         )
                     )
-                elif model_hparams.model_type == "pretrained":
-                    desc_list.append(
-                        TestingDesc(
-                            model_hparams,
-                            dataset_hparams,
-                            pretraining_hparams,
-                            testing_hparams,
-                        )
+                elif model_type in ["finetuned", None]:
+                    augment_hparams = AugmentationHparams.create_from_args(
+                        args, prefix=prefix_str
                     )
+                    training_hparams = TrainingHparams.create_from_args(
+                        args, prefix=prefix_str
+                    )
+                    augment_dict = asdict(augment_hparams)
+                    training_dict = asdict(training_hparams)
+
+                    for augment_choices in product(
+                        toggle_choices, repeat=num_augment_selected
+                    ):
+                        augment_modify_dict = dict()
+                        augment_counter = 0
+                        for (index, arg_name) in possible_augment_toggle_args:
+                            if selected_augment_toggle_args[index]:
+                                augment_modify_dict[arg_name] = augment_choices[
+                                    augment_counter
+                                ]
+                                augment_counter += 1
+                        assert augment_counter == num_augment_selected
+                        modified_augment_hparams = AugmentationHparams.modified(
+                            augment_dict, augment_modify_dict
+                        )
+
+                        for training_choices in product(
+                            toggle_choices, repeat=num_training_selected
+                        ):
+                            training_modify_dict = dict()
+                            training_counter = 0
+                            for (index, arg_name) in possible_training_toggle_args:
+                                if selected_training_toggle_args[index]:
+                                    training_modify_dict[arg_name] = training_choices[
+                                        training_counter
+                                    ]
+                                    training_counter += 1
+                            assert training_counter == num_training_selected
+                            modified_training_hparams = TrainingHparams.modified(
+                                training_dict, training_modify_dict
+                            )
+
+                            desc_list.append(
+                                TestingDesc(
+                                    model_hparams,
+                                    dataset_hparams,
+                                    modified_augment_hparams,
+                                    modified_training_hparams,
+                                    testing_hparams,
+                                )
+                            )
                 else:
                     raise ValueError(
                         f"Model type {model_hparams.model_type} is an invalid argument"
@@ -127,131 +156,20 @@ class MultiTestingDesc(desc.Desc):
 
     @property
     def test_outputs(self):
-        return datasets_registry.num_labels(self.dataset_hparams)
+        return datasets_registry.num_labels(self.desc_list[0].dataset_hparams)
 
     def run_path(self, replicate, verbose=False):
-        root_location = get_platform().runner_root
-
-        dataset_str = self.get_dataset_name()
-        model_str = self.get_model_name()
-        if model_str.startswith("RB"):
-            train_runner_str = "finetuning"
-        else:
-            train_runner_str = "training"
-        # self.name_prefix()
-
-        dataset_prefix = "data_"
-        if not (
-            self.dataset_hparams.gaussian_augment
-            or self.dataset_hparams.N_project
-            or self.dataset_hparams.N_mixup
-        ):
-            dataset_prefix += "std_"
-        else:
-            if self.dataset_hparams.gaussian_augment:
-                dataset_prefix += "gaussian_"
-            if self.dataset_hparams.N_project:
-                dataset_prefix += "Nproject_"
-            if self.dataset_hparams.N_mixup:
-                dataset_prefix += "Nmixup_"
-        dataset_hash = self.hashname(type_str="data")
-
-        model_prefix = "model_"
-        model_hash = self.hashname(type_str="model")
-
-        train_prefix = "train_"
-        if not (self.training_hparams.adv_train or self.training_hparams.N_adv_train):
-            train_prefix += "std_"
-        else:
-            if self.training_hparams.adv_train:
-                train_prefix += "adv_"
-            if self.training_hparams.N_adv_train:
-                train_prefix += "Nadv_"
-        train_hash = self.hashname(type_str="train")
-
-        replicate_str = f"replicate_{replicate}"
-
-        test_runner_str = self.name_prefix()
-        test_prefix = "test_"
-        test_hash = self.hashname(type_str="test")
-
-        logger_paths = dict()
-        logger_paths["data"] = os.path.join(
-            root_location,
-            dataset_str,
-            model_str,
-            train_runner_str,
-            dataset_prefix + dataset_hash,
+        raise NotImplementedError(
+            "Please call the run_path of individual TestingDesc instances"
         )
-
-        logger_paths["model"] = os.path.join(
-            logger_paths["data"], model_prefix + model_hash
-        )
-
-        logger_paths["train"] = os.path.join(
-            logger_paths["model"], train_prefix + train_hash
-        )
-
-        logger_paths["train_run_path"] = os.path.join(
-            logger_paths["train"],
-            replicate_str,
-        )
-
-        full_run_path = os.path.join(
-            logger_paths["train_run_path"], test_runner_str, test_prefix + test_hash
-        )
-
-        if get_platform().is_primary_process and verbose:
-            print(
-                "\nDataset hparams should already be logged at {}".format(
-                    logger_paths["data"]
-                )
-            )
-            print(
-                "\nModel hparams should already be logged at {}".format(
-                    logger_paths["model"]
-                )
-            )
-            print(
-                "\nTraining hparams should be logged at {}".format(
-                    logger_paths["train"]
-                )
-            )
-            print("\nTesting hparams will be logged at {}".format(full_run_path))
-
-        if not get_platform().exists(logger_paths["train_run_path"]) and verbose:
-            raise ValueError("\n No trained models found, Can't run test job~")
-
-        if not get_platform().exists(full_run_path) and verbose:
-            print("A job with this configuration has not been run yet.")
-
-        return full_run_path, logger_paths
 
     @property
     def display(self):
-        return "\n".join(
-            [
-                self.dataset_hparams.display,
-                self.model_hparams.display,
-                self.training_hparams.display,
-                self.testing_hparams.display,
-            ]
+        raise NotImplementedError(
+            "Please call the display of the individual TestingDesc instances"
         )
 
     def save_param(self, replicate):
-
-        full_run_path, _ = self.run_path(replicate)
-
-        if not get_platform().is_primary_process:
-            return
-        if not get_platform().exists(full_run_path):
-            get_platform().makedirs(full_run_path)
-            hparams_strs = self.get_hparams_str(type_str="test")
-            with get_platform().open(
-                paths.params_loc(full_run_path, "test"), "w"
-            ) as fp:
-                fp.write("\n".join(hparams_strs))
-        else:
-            print(
-                "A job with this configuration may have already been initiated."  # Stale. Delete the existing job results to run again.
-            )
+        raise NotImplementedError(
+            "Please call the save param of the individual TestingDesc instances"
+        )

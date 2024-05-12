@@ -7,7 +7,7 @@ def get_attack(training_hparams):
     if training_hparams.adv_train_attack_type == "PGD":
         if training_hparams.adv_train_attack_norm == "2":
             adv_attack = projected_gradient_descent_2
-        if training_hparams.adv_train_attack_norm == "inf":
+        if training_hparams.adv_train_attack_norm == "Linf":
             adv_attack = projected_gradient_descent_linf
     return adv_attack
 

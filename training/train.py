@@ -10,6 +10,7 @@ import datasets.registry
 from foundations import hparams
 from foundations import paths
 from foundations.step import Step
+from foundations.desc import TrainingDesc
 
 from models.base import Model, DistributedDataParallel
 import models.registry
@@ -29,6 +30,7 @@ from threat_specification.greedy_subset import load_greedy_subset
 
 def train(
     dataset_hparams: hparams.DatasetHparams,
+    augment_hparams: hparams.AugmentationHparams,
     training_hparams: hparams.TrainingHparams,
     model: Model,
     train_loader: DataLoader,
@@ -42,6 +44,7 @@ def train(
 
     Args:
       * dataset_hparams: The dataset hyperparameters whose schema is specified in hparams.py.
+      * augment_hparams: The augmentation hyperparameters whose scheme is specified in hparams.py
       * training_hparams: The training hyperparameters whose schema is specified in hparams.py.
       * model: The model to train. Must be a models.base.Model
       * train_loader: The training data. Must be a datasets.base.DataLoader
@@ -97,13 +100,13 @@ def train(
         return
 
     if (
-        dataset_hparams.N_project
-        or dataset_hparams.N_mixup
+        augment_hparams.N_project
+        or augment_hparams.N_mixup
         or training_hparams.N_adv_train
     ):
         greedy_subsets = load_greedy_subset(dataset_hparams)
 
-    if dataset_hparams.mixup:
+    if augment_hparams.mixup:
         mixup = v2.transforms.MixUp(num_classes=dataset_hparams.num_labels)
 
     # The training loop.
@@ -135,7 +138,10 @@ def train(
             examples = examples.to(device=get_platform().torch_device)
             labels = labels.to(device=get_platform().torch_device)
 
-            if dataset_hparams.N_mixup and augmentation_flag:
+            examples_list = []
+            examples_list.append(examples)
+
+            if augment_hparams.N_mixup and augmentation_flag:
                 shuffle_indices = torch.randperm(len(labels))
                 perturbed_examples = non_isotropic_projection(
                     examples,
@@ -145,11 +151,12 @@ def train(
                     threshold=dataset_hparams.N_threshold,
                     # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                 )
-                examples = torch.cat((examples, perturbed_examples), dim=0)
-                labels = torch.cat((labels, labels), dim=0)
+                examples.list(perturbed_examples)
+                # examples = torch.cat((examples, perturbed_examples), dim=0)
+                # labels = torch.cat((labels, labels), dim=0)
 
             if augmentation_flag and (
-                dataset_hparams.gaussian_augment or dataset_hparams.N_project
+                dataset_hparams.gaussian_augment or augment_hparams.N_project
             ):
                 perturbation = torch.zeros_like(examples).to(
                     device=get_platform().torch_device
@@ -159,7 +166,7 @@ def train(
                     10 * dataset_hparams.gaussian_aug_std,
                 )
 
-                if dataset_hparams.N_project:
+                if augment_hparams.N_project:
                     perturbed_examples = non_isotropic_projection(
                         examples,
                         labels,
@@ -174,8 +181,9 @@ def train(
                     torch.max(perturbation.detach(), -examples), 1 - examples
                 )  # clip examples+perturbation to [0,1]
 
-                examples = torch.cat((examples, examples + perturbation), dim=0)
-                labels = torch.cat((labels, labels), dim=0)
+                examples_list.append(examples + perturbation)
+                # examples = torch.cat((examples, examples + perturbation), dim=0)
+                # labels = torch.cat((labels, labels), dim=0)
 
             if (
                 training_hparams.N_adv_train or training_hparams.adv_train
@@ -216,11 +224,9 @@ def train(
                     torch.max(perturbation.detach(), -examples), 1 - examples
                 )  # clip examples+perturbation to [0,1]
 
-                examples = torch.cat((examples, examples + perturbation), dim=0)
-                labels = torch.cat((labels, labels), dim=0)
-
-            if dataset_hparams.mixup:
-                examples, labels = mixup(examples, labels)
+                examples_list.append(examples + perturbation)
+                # examples = torch.cat((examples, examples + perturbation), dim=0)
+                # labels = torch.cat((labels, labels), dim=0)
 
             step_optimizer.zero_grad()
             model.train()
@@ -233,7 +239,14 @@ def train(
                 )
                 return
 
-            loss = model.loss_criterion(model(examples), labels)
+            loss = 0.0
+            for inputs in examples_list:
+                loss += model.loss_criterion(model(inputs), labels)
+
+            if augment_hparams.mixup:
+                mixup_examples, mixup_labels = mixup(examples, labels)
+                loss += model.loss_criterion(model(mixup_examples), mixup_labels)
+            # loss = model.loss_criterion(model(examples), labels)
 
             if loss.isnan().any() and get_platform().is_primary_process:
                 print(
@@ -256,35 +269,39 @@ def train(
 
 
 def standard_train(
-    model: Model,
     output_location: str,
-    dataset_hparams: hparams.DatasetHparams,
-    training_hparams: hparams.TrainingHparams,
+    desc: TrainingDesc,
     start_step: Step = None,
     verbose: bool = True,
     evaluate_every_epoch: bool = False,
     evaluate_every_few_epoch: int = 10,
 ):
     """Train using the standard callbacks according to the provided hparams."""
-
-    # If the model file for the end of training already exists in this location, do not train
-    iterations_per_epoch = datasets.registry.iterations_per_epoch(dataset_hparams)
-    train_end_step = Step.from_str(
-        training_hparams.training_steps, iterations_per_epoch
-    )
-    if models.registry.exists(
-        output_location, train_end_step
-    ) and get_platform().exists(paths.logger(output_location)):
+    if desc.model_hparams.model_type == "pretrained":
+        # check if model exists at the expected location.
         return
+    else:
+        # model_type is either None or finetuned
+        # If the model file for the end of training already exists in this location, do not train
+        iterations_per_epoch = datasets.registry.iterations_per_epoch(
+            desc.dataset_hparams
+        )
+        train_end_step = Step.from_str(
+            desc.training_hparams.training_steps, iterations_per_epoch
+        )
+        if models.registry.exists(
+            output_location, train_end_step
+        ) and get_platform().exists(paths.logger(output_location)):
+            return
 
-    # penultimate_ep = "38ep"
-    # train_penultimate_step = Step.from_str(penultimate_ep, iterations_per_epoch)
+    # need to train a model, get its initialized/pretrained weights
+    model = models.registry.get(desc.dataset_hparams.dataset_name, desc.model_hparams)
 
-    train_loader = datasets.registry.get(dataset_hparams, train=True)
-    test_loader = datasets.registry.get(dataset_hparams, train=False)
+    train_loader = datasets.registry.get(desc.dataset_hparams, train=True)
+    test_loader = datasets.registry.get(desc.dataset_hparams, train=False)
 
     callbacks = standard_callbacks.standard_callbacks(
-        training_hparams,
+        desc.training_hparams,
         train_loader,
         test_loader,
         start_step=start_step,
@@ -294,8 +311,9 @@ def standard_train(
     )
 
     train(
-        dataset_hparams,
-        training_hparams,
+        desc.dataset_hparams,
+        desc.augment_hparams,
+        desc.training_hparams,
         model,
         train_loader,
         output_location,

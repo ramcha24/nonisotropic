@@ -60,80 +60,62 @@ class TrainingDesc(desc.Desc):
     def train_outputs(self):
         return datasets_registry.num_labels(self.dataset_hparams)
 
-    def run_path(self, replicate, verbose=False):
+    def run_path(self, verbose=False):
         root_location = get_platform().runner_root
 
-        dataset_str = self.get_dataset_name()
-        model_str = self.get_model_name()
-        if model_str.startswith("RB"):
-            runner_str = "finetuning"
-        else:
-            runner_str = self.name_prefix()
+        dataset_dir = self.dataset_hparams.dir_path(identifier_name="dataset_name")
+        model_dir = self.dataset_hparams.dir_path(
+            identifier_name="model_name",
+            include_names=["model_type", "model_source", "threat_model"],
+        )
 
-        augment_prefix = "data_"
-        if not (
-            self.augment_hparams.gaussian_augment
-            or self.augment_hparams.N_project
-            or self.augment_hparams.N_mixup
-        ):
-            augment_prefix += "std_"
-        else:
-            if self.augment_hparams.gaussian_augment:
-                augment_prefix += "gaussian_"
-            if self.augment_hparams.N_project:
-                augment_prefix += "Nproject_"
-            if self.augment_hparams.N_mixup:
-                augment_prefix += "Nmixup_"
-        augment_hash = self.hashname(type_str="augment")
-
-        model_prefix = "model_"
-        model_hash = self.hashname(type_str="model")
-
-        train_prefix = "train_"
-        if not (self.training_hparams.adv_train or self.training_hparams.N_adv_train):
-            train_prefix += "std_"
-        else:
-            if self.training_hparams.adv_train:
-                train_prefix += "adv_"
-            if self.training_hparams.N_adv_train:
-                train_prefix += "Nadv_"
-        train_hash = self.hashname(type_str="train")
-
-        replicate_str = f"replicate_{replicate}"
+        augment_dir = self.augment_hparams.dir_path()
+        train_dir = self.training_hparams.dir_path(include_names=["train_replicate"])
 
         logger_paths = dict()
-        logger_paths["augment"] = os.path.join(
-            root_location,
-            dataset_str,
-            model_str,
-            runner_str,
-            augment_prefix + augment_hash,
+        logger_paths["dataset_path"] = os.path.join(root_location, dataset_dir)
+        logger_paths["model_path"] = os.path.join(
+            logger_paths["dataset_path"], model_dir
         )
 
-        logger_paths["model"] = os.path.join(
-            logger_paths["data"], model_prefix + model_hash
+        logger_paths["augment_path"] = os.path.join(
+            logger_paths["model_path"], augment_dir
         )
 
-        logger_paths["train"] = os.path.join(
-            logger_paths["model"], train_prefix + train_hash
-        )
-
-        full_run_path = os.path.join(
-            logger_paths["train"],
-            replicate_str,
+        logger_paths["train_path"] = os.path.join(
+            logger_paths["augment_path"], train_dir
         )
 
         if get_platform().is_primary_process and verbose:
-            print("\nAugment hparams will be logged at {}".format(logger_paths["augment"]))
-            print("\nModel hparams will be logged at {}".format(logger_paths["model"]))
             print(
-                "\nTraining hparams will be logged at {}".format(logger_paths["train"])
+                "\nDataset hparams will be logged at {}".format(
+                    logger_paths["dataset_path"]
+                )
+            )
+            print(
+                "\nModel hparams and weights will be found at {}".format(
+                    logger_paths["model_path"]
+                )
+            )
+            print(
+                "\nAugmentation hparams will be logged at {}".format(
+                    logger_paths["augment_path"]
+                )
+            )
+            print(
+                "\nTraining hparams will be logged at {}".format(
+                    logger_paths["train_path"]
+                )
             )
 
-        if not get_platform().exists(full_run_path) and verbose:
-            print("\nA job with this configuration has not been run yet.")
+        if not get_platform().exists(logger_paths["train_path"]):
+            raise ValueError(
+                "\n A job with this configuration has not been run yet.".format(
+                    logger_paths["train_path"]
+                )
+            )
 
-        return full_run_path, logger_paths
+        return logger_paths
 
     @property
     def display(self):
@@ -146,10 +128,10 @@ class TrainingDesc(desc.Desc):
             ]
         )
 
-    def save_param(self, replicate):
+    def save_param(self):
 
-        full_run_path, logger_paths = self.run_path(replicate)
-
+        logger_paths = self.run_path()
+        full_run_path = logger_paths["train_path"]
         if not get_platform().is_primary_process:
             return
         if not get_platform().exists(full_run_path):
