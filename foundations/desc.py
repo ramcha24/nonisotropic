@@ -42,18 +42,15 @@ class Desc(abc.ABC):
         if self.model_hparams.model_name is None:
             raise ValueError("Model name is not set")
         else:
-            model_name = ""
-            if self.pretraining_hparams is None:
-                for item in self.model_hparams.model_name.split("_")[1:]:
-                    model_name += str(item)
-                return model_name
+            if self.model_hparams.model_type is None:
+                return "".join(self.model_hparams.model_name.split("_"))
             else:
-                return self.model_hparams.model_name.split("_")[1:]
+                return self.model_hparams.model_name.split
 
     def get_hparams_str(self, type_str):
         hparams_strs = None
 
-        if type_str == "data":
+        if type_str == "dataset":
             hparams_strs = self.class_select(hparams.DatasetHparams)
         elif type_str == "augment":
             hparams_strs = self.class_select(hparams.AugmentationHparams)

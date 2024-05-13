@@ -132,7 +132,7 @@ class Hparams(abc.ABC):
     def modified(cls, default_dict, modify_dict) -> "Hparams":
         for field in fields(cls):
             if field.type == bool and field.name in modify_dict.keys():
-                default_dict[field.name] == modify_dict[field.name]
+                default_dict[field.name] = modify_dict[field.name]
 
         return cls(**default_dict)
 
@@ -141,17 +141,17 @@ class Hparams(abc.ABC):
             assert self._name is not None
             prefix = self._name.split(" ")[0].lower()
         else:
-            prefix = getattr(self, "identifier_name")
+            prefix = getattr(self, identifier_name)
 
         for field in fields(self):
             value = getattr(self, field.name)
             if field.type == bool and value:
                 prefix += "_" + field.name.replace("_", "")
-            elif field.name in include_names and value:
+            elif include_names and (field.name in include_names) and value:
                 prefix += "_" + str(value)
 
         hash_str = hashlib.md5(";".join(self.__str__()).encode("utf-8")).hexdigest()[:6]
-        return prefix + hash_str
+        return prefix + "_" + hash_str
 
     @property
     def display(self):
@@ -192,21 +192,13 @@ class DatasetHparams(Hparams):
     num_labels: int
     num_channels: int
     num_spatial_dims: int
-    do_not_augment: bool = False
+    num_train: int = 50000
+    num_test: int = 10000
     transformation_seed: int = None
     subsample_fraction: float = None
     random_labels_fraction: float = None
     unsupervised_labels: str = None
     blur_factor: int = None
-    # gaussian_augment: bool = False
-    # gaussian_aug_mean: float = 0.0
-    # gaussian_aug_std: float = 1.0
-    # greedy_per_label: int = 50
-    # N_threshold: float = 0.4
-    # N_project: bool = False
-    # N_mixup: bool = False
-    # mixup: bool = False
-    # augmentation_frequency: int = 3
 
     _name: str = "Dataset Hyperparameters"
     _description: str = "Hyperparameters that select the dataset, data augmentation, and other data transformations."
@@ -217,9 +209,8 @@ class DatasetHparams(Hparams):
     _num_spatial_dims: str = (
         "The number of spatial dimensions in the dataset. Example: 32"
     )
-    _do_not_augment: str = (
-        "If True, data augmentation is disabled. It is enabled by default."
-    )
+    _num_train: str = "Number of training examples"
+    _num_test: str = "Number of test examples"
     _transformation_seed: str = (
         "The random seed that controls dataset transformations like "
         "random labels, subsampling, and unsupervised labels."
@@ -234,42 +225,21 @@ class DatasetHparams(Hparams):
     _blur_factor: str = (
         "Blur the training set by downsampling and then upsampling by this multiple."
     )
-    # _gaussian_augment: str = (
-    #     "Add gaussian noise augmentation to the dataset during training"
-    # )
-    # _gaussian_aug_mean: str = (
-    #     "Mean of added gausian noise, ignored if gaussian_augment == False"
-    # )
-    # _gaussian_aug_std: str = (
-    #     "Std Deviation of added gaussian noise, ignored if gaussian_augment == False"
-    # )
-    # _greedy_per_label: str = "Number of points to select per label for greedy subset"
-    # _N_threshold: str = "Threshold for non-isotropic augmentation, ignored if non_isotropic_augment == False or non_isotropic_mixup == False"
-    # _N_project: str = (
-    #     "Add non-isotropic noise augmentation to the dataset during training"
-    # )
-    # _N_mixup: str = "Mixup the dataset with non-isotropic projection"
-    # _mixup: str = "Mixup the dataset with standard mixup"
 
 
 @dataclass
 class AugmentationHparams(Hparams):
     augmentation_frequency: int = 3
-    gaussian_augment: bool = False
     gaussian_aug_mean: float = 0.0
     gaussian_aug_std: float = 1.0
     greedy_per_label: int = 50
     N_threshold: float = 0.4
-    N_project: bool = False
-    N_mixup: bool = False
+    N_aug: bool = False
     mixup: bool = False
 
     _name: str = "Augmentation Hyperparameters"
     _description: str = "Hyperparameters that specify the kind of data augmentation to use while training/fine-tuning."
     _augmentation_frequency: str = "How frequently should the training runner augment"
-    _gaussian_augment: str = (
-        "Add gaussian noise augmentation to the dataset during training"
-    )
     _gaussian_aug_mean: str = (
         "Mean of added gausian noise, ignored if gaussian_augment == False"
     )
@@ -278,21 +248,18 @@ class AugmentationHparams(Hparams):
     )
     _greedy_per_label: str = "Number of points to select per label for greedy subset"
     _N_threshold: str = "Threshold for non-isotropic augmentation, ignored if non_isotropic_augment == False or non_isotropic_mixup == False"
-    _N_project: str = (
-        "Add non-isotropic noise augmentation to the dataset during training"
-    )
-    _N_mixup: str = "Mixup the dataset with non-isotropic projection"
+    _N_aug: str = "Add non-isotropic augmentation to the dataset during training"
     _mixup: str = "Mixup the dataset with standard mixup"
 
 
 @dataclass
 class ModelHparams(Hparams):
     model_name: str
-    model_init: str = None
-    batchnorm_init: str = None
-    model_type: str = None  # or "pretrained" or "finetuned"
-    model_source: str = None  # or "robustbenchmark"
-    threat_model: str = None  # or "L_inf" or "L2"
+    model_init: str = "kaiming_normal"
+    batchnorm_init: str = "uniform"
+    model_type: str = None
+    model_source: str = None
+    threat_model: str = None
 
     _name: str = "Model Hyperparameters"
     _description: str = (
@@ -310,7 +277,6 @@ class ModelHparams(Hparams):
 
 @dataclass
 class TrainingHparams(Hparams):
-    train_replicate: int = 1
     optimizer_name: str = "sgd"
     lr: float = "0.1"
     training_steps: str = "40ep"
@@ -339,10 +305,6 @@ class TrainingHparams(Hparams):
     _training_steps: str = (
         "The number of steps to train as epochs ('160ep') or iterations ('50000it')."
     )
-    _train_replicate: str = (
-        "The index of this particular replicate. "
-        "Use a different replicate number to run another copy of the same experiment"
-    )
     _momentum: str = "The momentum to use with the SGD optimizer."
     _nesterov: str = "The nesterov momentum to use with the SGD optimizer. Cannot set both momentum and nesterov."
     _milestone_steps: str = (
@@ -369,7 +331,6 @@ class TrainingHparams(Hparams):
 
 @dataclass
 class TestingHparams(Hparams):
-    test_replicate: int = 1
     standard_eval: bool = False
     adv_eval: bool = False
     N_adv_eval: bool = False
@@ -379,10 +340,6 @@ class TestingHparams(Hparams):
 
     _name: str = "Testing Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is tested."
-    _test_replicate: str = (
-        "The index of this particular replicate. "
-        "Use a different replicate number to run another copy of the same experiment"
-    )
     _standard_eval: str = (
         "If True, computes standard accuracy of the trained/checkpointed model"
     )

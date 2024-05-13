@@ -37,18 +37,14 @@ class Dataset(base.ImageDataset):
         super(Dataset, self).__init__(
             examples,
             labels,
-            image_transforms or [],
-            Dataset._tensor_transforms,
+            image_transforms=image_transforms or [],
+            tensor_transforms=[
+                torchvision.transforms.Normalize(
+                    mean=[0.4914, 0.4822, 0.4465],
+                    std=[0.2023, 0.1994, 0.2010],
+                )
+            ],
         )
-
-    @staticmethod
-    def _tensor_transforms():
-        return [
-            torchvision.transforms.Normalize(
-                mean=[0.4914, 0.4822, 0.4465],
-                std=[0.2023, 0.1994, 0.2010],
-            )
-        ]
 
     @staticmethod
     def num_train_examples():
@@ -73,9 +69,7 @@ class Dataset(base.ImageDataset):
             train=True,
             root=os.path.join(get_platform().dataset_root, Dataset.dataset_name()),
             download=True,
-            transform=torchvision.transforms.Compose(
-                [torchvision.transforms.ToTensor()] + Dataset._tensor_transforms()
-            ),
+            # transform=torchvision.transforms.Compose(    [torchvision.transforms.ToTensor()] + Dataset._tensor_transforms()),
         )
         # return Dataset(train_set.data, np.array(train_set.targets), augment if use_augmentation else [])
         return Dataset(train_set.data, np.array(train_set.targets), [])
@@ -86,9 +80,9 @@ class Dataset(base.ImageDataset):
             train=False,
             root=os.path.join(get_platform().dataset_root, Dataset.dataset_name()),
             download=True,
-            transform=torchvision.transforms.Compose(
-                [torchvision.transforms.ToTensor()] + Dataset._tensor_transforms()
-            ),
+            # transform=torchvision.transforms.Compose(
+            #    [torchvision.transforms.ToTensor()] + Dataset._tensor_transforms()
+            # ),
         )
         return Dataset(test_set.data, np.array(test_set.targets))
 

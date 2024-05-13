@@ -53,6 +53,9 @@ def main():
 
     platform_name = arg_utils.maybe_get_arg("platform") or default_platform_name
 
+    if "OMP_NUM_THREADS" not in os.environ:
+        os.environ["OMP_NUM_THREADS"] = "48"  # default value
+
     if platform_name == "distributed" and not rank_flag:
         print(
             "\nLocal rank environment variable has not been set, For a distributed job, try 'torchrun --nproc_per_node=2 nonisotropic.py ...'\n"
@@ -72,7 +75,7 @@ def main():
     # Add the arguments for various runners
     JobArgs.add_args(parser)
 
-    if runner_name.starts_with("multi"):
+    if runner_name.startswith("multi"):
         ToggleArgs.add_args(parser)
 
     runner_registry.get(runner_name).add_args(parser)

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from cli import arg_utils
 from foundations import hparams
@@ -20,8 +21,10 @@ class JobArgs(hparams.Hparams):
     model_name: str = None
     quiet: bool = False
     evaluate_only_at_end: bool = False
+    evaluate_every_few_epoch: int = 2  # 0
     evaluate_only_batch_test: bool = False
-    # should add dataset, model_type, threat_type
+    train_replicate: int = -1
+    test_replicate: int = -1
 
     _name: str = "High-level arguments"
     _description: str = (
@@ -38,10 +41,20 @@ class JobArgs(hparams.Hparams):
     _evaluate_only_batch_test: str = (
         "Run the test runner only on a random batch of the test set"
     )
+    _evaluate_every_few_epoch: str = (
+        "Evaluate validation runner every few epochs, default is 10"
+    )
+    _train_replicate: str = (
+        "The replicate number for training. -1 means no replicate number is specified."
+    )
+    _test_replicate: str = (
+        "The replicate number for testing. -1 means no replicate number is specified."
+    )
 
 
 @dataclass
 class ToggleArgs(hparams.Hparams):
+    model_type: str = None
     toggle_N_aug: bool = False
     toggle_mixup: bool = False
     toggle_adv_train: bool = False
@@ -58,10 +71,7 @@ class ToggleArgs(hparams.Hparams):
 
 
 def maybe_get_default_hparams(runner_name: str = None):
-    model_name = arg_utils.maybe_get_arg("model_name")
-    dataset_name = arg_utils.maybe_get_arg("dataset")
-    threat_model = arg_utils.maybe_get_arg("threat_model")
-    model_type = arg_utils.maybe_get_arg("model_type")
+    dataset_name = arg_utils.maybe_get_arg("dataset_name")
 
     if dataset_name not in registered_datasets:
         raise ValueError(
@@ -70,14 +80,15 @@ def maybe_get_default_hparams(runner_name: str = None):
             )
         )
 
-    dataset_hparams = registered_datasets[dataset_name].default_dataset_hparams()
-    augment_hparams = hparams.AugmentationHparams()
-    model_hparams = None
-    training_hparams = None
-    testing_hparams = None
+    dataset_hparams = registered_datasets[
+        dataset_name
+    ].Dataset.default_dataset_hparams()
+
+    model_name = arg_utils.maybe_get_arg("model_name")
+    threat_model = arg_utils.maybe_get_arg("threat_model")
+    model_type = arg_utils.maybe_get_arg("model_type")
 
     if runner_name in ["train", "test"]:
-        # for eg. if model_name="cifar10_resnet" then we are not dealing with pretrained or finetuned benchmark models
         assert (
             model_name is not None
         ), "For train and test runner, a single model must be specified via --model_name"
@@ -100,37 +111,57 @@ def maybe_get_default_hparams(runner_name: str = None):
         )
         if runner_name == "train":
             return TrainingDesc(
-                dataset_hparams, augment_hparams, model_hparams, training_hparams
+                dataset_hparams,
+                model_hparams,
+                hparams.AugmentationHparams(),
+                training_hparams,
             )
         if runner_name == "test":
-            testing_hparams = hparams.TestingHparams()
             return TestingDesc(
                 dataset_hparams,
-                augment_hparams,
                 model_hparams,
+                hparams.TestingHparams(),
+                hparams.AugmentationHparams(),
                 training_hparams,
-                testing_hparams,
             )
 
     elif runner_name == "multi_test":
         # for multi_test runner,
-        # python nonisotropic.py multi_test --dataset=cifar10 --threat_model-Linf --model_type=pretrained
+        # python nonisotropic.py multi_test --dataset_name=cifar10 --threat_model-Linf --model_type=pretrained
 
-        assert (
-            model_type is not None
-        ), "For multi_test runner, a valid model type needs to be specified via --model_type"
+        assert model_type in [
+            None,
+            "pretrained",
+            "finetuned",
+        ], "Invalid model type {}".format(model_type)
 
         threat_model = (
             threat_model or "Linf"
         )  # for now Linf is the default and only threat model
 
-        if model_type == "multitrain":
+        if model_type is None:
             assert (
                 model_name is not None
             ), "For testing previously multi-trained models via multi_test runner, a single model must be specified via --model_name"
 
-            raise NotImplementedError
-        elif model_type == "pretrained" or "finetuned":
+            model_hparams = models.registry.get_default_hparams(
+                model_name, dataset_name, param_str="model"
+            )
+            training_hparams = models.registry.get_default_hparams(
+                model_name, dataset_name, param_str="training"
+            )
+            testing_hparams = hparams.TestingHparams()
+            return [
+                TestingDesc(
+                    dataset_hparams,
+                    model_hparams,
+                    testing_hparams,
+                    hparams.AugmentationHparams(),
+                    training_hparams,
+                )
+            ]
+
+        else:  # model_type == "pretrained" or "finetuned"
             assert (
                 threat_model == "Linf"
             ), "For multi_test runner with model_type : {}, currently only Linf threat_model is supported."
@@ -142,26 +173,26 @@ def maybe_get_default_hparams(runner_name: str = None):
             for model_name in selected_model_names:
                 model_hparams = models.registry.get_default_hparams(
                     model_name,
-                    runner_name,
                     dataset_name,
                     threat_model,
+                    model_type,
                     param_str="model",
                 )
 
                 if model_type == "finetuned":
                     training_hparams = models.registry.get_default_hparams(
                         model_name,
-                        runner_name,
                         dataset_name,
                         threat_model,
+                        model_type,
                         param_str="training",
                     )
                     test_desc = TestingDesc(
                         dataset_hparams,
-                        augment_hparams,
                         model_hparams,
-                        training_hparams,
                         testing_hparams,
+                        hparams.AugmentationHparams(),
+                        training_hparams,
                     )
                     defaults_list.append(test_desc)
                 else:
@@ -173,7 +204,66 @@ def maybe_get_default_hparams(runner_name: str = None):
                     defaults_list.append(test_desc)
             return defaults_list
     elif runner_name == "multi_train":
-        raise NotImplementedError
+        # for multi_train runner,
+        # python nonisotropic.py multi_test --dataset_name=cifar10 --threat_model-Linf --model_type=pretrained
+        # or python nonisotropic.py multi_test --dataset_name=cifar10 --model_name=cifar10_resnet_50 --toggle_N_aug
+
+        assert model_type in [
+            None,
+            "pretrained",
+        ], "Invalid model type {}".format(model_type)
+
+        if model_type is None:
+            assert (
+                model_name is not None
+            ), "For multi training regular models with different configurations, a single model name must be specified via --model_name"
+
+            model_hparams = models.registry.get_default_hparams(
+                model_name, dataset_name, param_str="model"
+            )
+            training_hparams = models.registry.get_default_hparams(
+                model_name, dataset_name, param_str="training"
+            )
+            return [
+                TrainingDesc(
+                    dataset_hparams,
+                    model_hparams,
+                    hparams.AugmentationHparams(),
+                    training_hparams,
+                )
+            ]
+
+        else:  # model_type == "pretrained"
+            threat_model = (
+                threat_model or "Linf"
+            )  # for now Linf is the default and only threat model
+
+            assert (
+                threat_model == "Linf"
+            ), "For multi_test runner with model_type : {}, currently only Linf threat_model is supported."
+
+            selected_model_names = rb_registry[dataset_name][threat_model]
+            defaults_list = []
+            for model_name in selected_model_names:
+                model_hparams = models.registry.get_default_hparams(
+                    model_name,
+                    dataset_name,
+                    threat_model,
+                    model_type,
+                    param_str="model",
+                )
+                training_hparams = models.registry.get_default_hparams(
+                    model_name, dataset_name, param_str="training"
+                )
+
+                train_desc = TrainingDesc(
+                    dataset_hparams,
+                    model_hparams,
+                    hparams.AugmentationHparams(),
+                    training_hparams,
+                )
+                defaults_list.append(train_desc)
+            return defaults_list
     else:
         raise ValueError(
             "Cannot supply default hparams for an invalid runner - {}".format(

@@ -67,10 +67,10 @@ def get(dataset_name, model_hparams: ModelHparams, outputs=None):
                 init_fn = get_initializer(model_hparams)
 
                 model = registered_model.get_model_from_name(
-                    dataset_name,
                     model_name,
                     init_fn,
-                    outputs,
+                    dataset_name=dataset_name,
+                    outputs=outputs,
                 )
                 return model
     else:
@@ -133,20 +133,25 @@ def get_default_hparams(
                     )
                 return params
     elif threat_model in ["Linf"]:
-        assert model_type in ["pretrained", "finetuned"]
+        assert model_type in [
+            "pretrained",
+            "finetuned",
+        ], "Model_type should be pretrained or finetuned instead got {}".format(
+            model_type
+        )
         # the presence of threat model indicates robust benchmark
         if robustbench.Model.is_valid_model_name(
             model_name, dataset_name, threat_model
         ):
             if param_str == "model":
-                params = registered_model.default_model_hparams(
+                params = robustbench.Model.default_model_hparams(
                     model_name,
                     dataset_name,
                     threat_model,
                     model_type,
                 )
             elif param_str == "training":
-                params = registered_model.default_training_hparams(
+                params = robustbench.Model.default_training_hparams(
                     model_name,
                     dataset_name,
                     threat_model,

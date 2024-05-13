@@ -5,6 +5,7 @@ from PIL import Image
 import torchvision
 
 from datasets import base
+from foundations import hparams
 from platforms.platform import get_platform
 
 
@@ -105,7 +106,7 @@ class Dataset(base.ImageDataset):
     def default_dataset_hparams() -> "hparams.DatasetHparams":
         return hparams.DatasetHparams(
             dataset_name="imagenet",
-            batch_size=64,
+            batch_size=128,
             num_labels=1000,
             num_channels=3,
             num_spatial_dims=224,

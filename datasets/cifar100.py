@@ -38,7 +38,12 @@ class Dataset(base.ImageDataset):
             examples,
             labels,
             image_transforms or [],
-            Dataset._tensor_transforms,
+            [
+                torchvision.transforms.Normalize(
+                    mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
+                    std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404],
+                )
+            ],
         )
 
     @staticmethod
@@ -58,24 +63,12 @@ class Dataset(base.ImageDataset):
         return "cifar100"
 
     @staticmethod
-    def _tensor_transforms():
-        return [
-            torchvision.transforms.Normalize(
-                mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
-                std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404],
-            )
-        ]
-
-    @staticmethod
     def get_train_set(use_augmentation=False):
         # augment = [torchvision.transforms.RandomHorizontalFlip(), torchvision.transforms.RandomCrop(32, 4)]
         train_set = CIFAR100(
             train=True,
             root=os.path.join(get_platform().dataset_root, Dataset.dataset_name()),
             download=True,
-            transform=torchvision.transforms.Compose(
-                [torchvision.transforms.ToTensor()] + Dataset._tensor_transforms()
-            ),
         )
         # return Dataset(train_set.data, np.array(train_set.targets), augment if use_augmentation else [])
         return Dataset(train_set.data, np.array(train_set.targets))
@@ -86,9 +79,6 @@ class Dataset(base.ImageDataset):
             train=False,
             root=os.path.join(get_platform().dataset_root, Dataset.dataset_name()),
             download=True,
-            transform=torchvision.transforms.Compose(
-                [torchvision.transforms.ToTensor()] + Dataset._tensor_transforms()
-            ),
         )
         return Dataset(test_set.data, np.array(test_set.targets))
 

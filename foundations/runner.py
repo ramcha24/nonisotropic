@@ -32,11 +32,6 @@ class Runner(abc.ABC):
 
         pass
 
-    @abc.abstractmethod
-    def num_sub_runners(self) -> int:
-        """Print the number of sub-runners if this class represents a collection of runners"""
-        pass
-
     # @staticmethod
     @abc.abstractmethod
     def run(self) -> None:

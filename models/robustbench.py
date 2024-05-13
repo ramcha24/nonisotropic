@@ -24,7 +24,9 @@ class Model(base.Model):
 
     @staticmethod
     def is_valid_model_name(model_name, dataset_name, threat_model):
-        assert threat_model == "Linf", "Only Linf threat specification is allowed for pretrained models."
+        assert (
+            threat_model == "Linf"
+        ), "Only Linf threat specification is allowed for pretrained models."
         assert dataset_name in ["cifar10", "cifar100", "imagenet"]
 
         return model_name in rb_registry[dataset_name][threat_model]
@@ -33,16 +35,18 @@ class Model(base.Model):
     def get_model_from_name(
         model_name,
         dataset_name,
-        threat_model
+        threat_model,
         outputs=10,
         initializer=None,
     ):
         assert initializer == None
-        assert threat_model == "Linf", "Only Linf threat specification is allowed for pretrained models."
+        assert (
+            threat_model == "Linf"
+        ), "Only Linf threat specification is allowed for pretrained models."
         assert dataset_name in ["cifar10", "cifar100", "imagenet"]
 
-        #threat_model = model_name.split("_")[0]
-        # pretrained_model_name = model_name.split("_")[1] 
+        # threat_model = model_name.split("_")[0]
+        # pretrained_model_name = model_name.split("_")[1]
 
         # WHAT ABOUT DATA PREPROCESSING
 
@@ -58,32 +62,42 @@ class Model(base.Model):
         return self.criterion
 
     @staticmethod
-    def default_model_hparams(model_name = None, dataset_name=None, threat_model=None, model_type=None):
-        assert threat_model == "Linf", "Only Linf threat specification is allowed for pretrained models."
+    def default_model_hparams(
+        model_name=None, dataset_name=None, threat_model=None, model_type=None
+    ):
+        assert (
+            threat_model == "Linf"
+        ), "Only Linf threat specification is allowed for pretrained models."
         assert dataset_name in ["cifar10", "cifar100", "imagenet"]
 
         return hparams.ModelHparams(
-            model_name = default_rb_registry[dataset_name][threat_model] if model_name is None else model_name,
-            model_type = model_type,
-            model_source = "robustbenchmark"
-            threat_model = threat_model
+            model_name=default_rb_registry[dataset_name][threat_model]
+            if model_name is None
+            else model_name,
+            model_type=model_type,
+            model_source="robustbenchmark",
+            threat_model=threat_model,
         )
-    
-    # THREAT MODEL IS SUPERFICIAL. ONLY Linf. 
-        
+
+    # THREAT MODEL IS SUPERFICIAL. ONLY Linf.
+
     @staticmethod
-    def default_training_hparams(model_name = None, dataset_name=None, threat_model=None, model_type=None):
-        if model_type == "pretrained" or  model_type is None:
-            return None 
-        elif model_type == "finetuned":
+    def default_training_hparams(
+        model_name=None, dataset_name=None, threat_model=None, model_type=None
+    ):
+        if model_type in ["pretrained", "finetuned"]:
             return hparams.TrainingHparams(
-            optimizer_name="sgd",
-            momentum=0.9,
-            milestone_steps="10ep",
-            lr=0.01,
-            gamma=0.1,
-            weight_decay=1e-4,
-            training_steps="20ep",
-        )
+                optimizer_name="sgd",
+                momentum=0.9,
+                milestone_steps="10ep",
+                lr=0.01,
+                gamma=0.1,
+                weight_decay=1e-4,
+                training_steps="20ep",
+            )
         else:
-            raise ValueError("No default training hparams for invalid model_type : {}".format(model_type))
+            raise ValueError(
+                "No default training hparams for invalid model_type : {}".format(
+                    model_type
+                )
+            )

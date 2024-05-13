@@ -17,6 +17,8 @@ cifar10_Linf_RB_model_names = [
 ]
 cifar10_dict = {"Linf": cifar10_Linf_RB_model_names}
 
+default_cifar10_dict = {"Linf": cifar10_Linf_RB_model_names[7]}
+
 
 cifar100_Linf_RB_model_names = [
     "Wang2023Better_WRN-70-16",
@@ -36,6 +38,8 @@ cifar100_Linf_RB_model_names = [
     "Jia2022LAS-AT_34_20",
 ]
 cifar100_dict = {"Linf": cifar100_Linf_RB_model_names}
+default_cifar100_dict = {"Linf": cifar100_Linf_RB_model_names[7]}
+
 
 imagenet_Linf_RB_model_names = [
     "Liu2023Comprehensive_Swin-L",
@@ -55,6 +59,7 @@ imagenet_Linf_RB_model_names = [
     "Debenedetti2022Light_XCiT-S12",
 ]
 imagenet_dict = {"Linf": imagenet_Linf_RB_model_names}
+default_imagenet_dict = {"Linf": imagenet_Linf_RB_model_names[7]}
 
 rb_registry = {
     "cifar10": cifar10_dict,
@@ -62,7 +67,8 @@ rb_registry = {
     "imagenet": imagenet_dict,
 }
 
-default_rb_registry = dict
-default_rb_registry["cifar10"] = {"Linf": cifar10_dict["Linf"][7]}
-default_rb_registry["cifar100"] = {"Linf": cifar100_dict["Linf"][7]}
-default_rb_registry["imagenet"] = {"Linf": imagenet_dict["Linf"][7]}
+default_rb_registry = {
+    "cifar10": default_cifar10_dict,
+    "cifar100": default_cifar100_dict,
+    "imagenet": default_imagenet_dict,
+}

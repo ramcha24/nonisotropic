@@ -47,14 +47,15 @@ class Model(base.Model):
         return x
 
     @staticmethod
-    def is_valid_model_name(model_name):
-        
+    def is_valid_model_name(model_name, dataset_name):
+
         return (
-            model_name.startswith("mnist_conv")
+            dataset_name == "mnist"
+            and model_name.startswith("mnist_conv")
             and len(model_name.split("_")) > 2
             and all([x.isdigit() and int(x) > 0 for x in model_name.split("_")[2:]])
         )
-        
+
     @staticmethod
     def get_model_from_name(model_name, initializer, outputs=10):
         if not Model.is_valid_model_name(model_name):

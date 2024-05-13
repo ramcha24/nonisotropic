@@ -77,11 +77,10 @@ class Model(base.Model):
         return out
 
     @staticmethod
-    def is_valid_model_name(model_name, dataset_name, threat_model=None):
-        assert threat_model is None
-        assert dataset_name == "cifar10"
+    def is_valid_model_name(model_name, dataset_name=None):
         return (
-            model_name.startswith("cifar10_resnet_")
+            dataset_name == "cifar10"
+            and model_name.startswith("cifar10_resnet_")
             and 5 > len(model_name.split("_")) > 2
             and all([x.isdigit() and int(x) > 0 for x in model_name.split("_")[2:]])
             and (int(model_name.split("_")[2]) - 2) % 6 == 0
@@ -89,7 +88,7 @@ class Model(base.Model):
         )
 
     @staticmethod
-    def get_model_from_name(model_name, dataset_name, initializer, outputs=10):
+    def get_model_from_name(model_name, initializer, dataset_name=None, outputs=10):
         """The naming scheme for a ResNet is 'cifar_resnet_N[_W]'.
 
         The ResNet is structured as an initial convolutional layer followed by three "segments"
@@ -158,7 +157,7 @@ class Model(base.Model):
             optimizer_name="sgd",
             momentum=0.9,
             milestone_steps="80ep,120ep",
-            lr=0.1,
+            lr=0.05,
             gamma=0.1,
             weight_decay=1e-4,
             training_steps="160ep",

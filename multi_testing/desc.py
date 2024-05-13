@@ -1,9 +1,10 @@
-from dataclasses import dataclass, fields, asdict, replace
+from __future__ import annotations
+from dataclasses import dataclass, asdict, field, fields
+from typing import ClassVar
 import os
 import argparse
 import json
 from itertools import product
-from collections import OrderedDict
 
 from datasets import registry as datasets_registry
 from foundations.desc import Desc
@@ -21,9 +22,9 @@ from testing.desc import TestingDesc
 
 @dataclass
 class MultiTestingDesc(Desc):
-    """the hyperparameters necessary to describe a testing run"""
+    """the hyperparameters necessary to describe a multi testing run"""
 
-    desc_list: list[TestingDesc]
+    desc_list: list[TestingDesc] = field(default_factory=list)
 
     @staticmethod
     def name_prefix():
@@ -34,23 +35,18 @@ class MultiTestingDesc(Desc):
         parser: argparse.ArgumentParser,
         defaults_list: list[TestingDesc] = None,
     ):
-        print("Inside Multi-testing runner")
-        print("Default list looks like")
-        print(len(defaults_list))
-        print(defaults_list[len(defaults_list) // 2])
-        print("\n")
-
         for defaults_index, defaults in enumerate(defaults_list):
             TestingDesc.add_args(
                 parser,
                 defaults,
                 prefix=str("multi_test_") + str(defaults_index),
             )
-            print(json.dumps(vars(parser.parse_args()), indent=4))
 
     @staticmethod
     def create_from_args(args: argparse.Namespace) -> "TestingDesc":
-        index_list = list(range(16))
+        index_list = list(
+            range(16)
+        )  # currently considering less than 16 pretrained models
         possible_augment_toggle_args = [
             "N_aug",
             "mixup",
@@ -86,13 +82,13 @@ class MultiTestingDesc(Desc):
                 testing_hparams = TestingHparams.create_from_args(
                     args, prefix=prefix_str
                 )
-                model_type == model_hparams.model_type
+                model_type = getattr(model_hparams, "model_type")
                 if model_type == "pretrained":
-                    assert num_selected == 0
+                    assert num_augment_selected + num_training_selected == 0
                     desc_list.append(
                         TestingDesc(
-                            model_hparams,
                             dataset_hparams,
+                            model_hparams,
                             testing_hparams,
                         )
                     )
@@ -111,7 +107,9 @@ class MultiTestingDesc(Desc):
                     ):
                         augment_modify_dict = dict()
                         augment_counter = 0
-                        for (index, arg_name) in possible_augment_toggle_args:
+                        for (index, arg_name) in enumerate(
+                            possible_augment_toggle_args
+                        ):
                             if selected_augment_toggle_args[index]:
                                 augment_modify_dict[arg_name] = augment_choices[
                                     augment_counter
@@ -127,7 +125,9 @@ class MultiTestingDesc(Desc):
                         ):
                             training_modify_dict = dict()
                             training_counter = 0
-                            for (index, arg_name) in possible_training_toggle_args:
+                            for (index, arg_name) in enumerate(
+                                possible_training_toggle_args
+                            ):
                                 if selected_training_toggle_args[index]:
                                     training_modify_dict[arg_name] = training_choices[
                                         training_counter
@@ -140,25 +140,24 @@ class MultiTestingDesc(Desc):
 
                             desc_list.append(
                                 TestingDesc(
-                                    model_hparams,
                                     dataset_hparams,
+                                    model_hparams,
+                                    testing_hparams,
                                     modified_augment_hparams,
                                     modified_training_hparams,
-                                    testing_hparams,
                                 )
                             )
                 else:
-                    raise ValueError(
-                        f"Model type {model_hparams.model_type} is an invalid argument"
-                    )
+                    raise ValueError(f"Model type {model_type} is an invalid argument")
 
-        return MultiTestingDesc(desc_list)
+        multi_desc = MultiTestingDesc(desc_list=desc_list)
+        return multi_desc
 
     @property
     def test_outputs(self):
         return datasets_registry.num_labels(self.desc_list[0].dataset_hparams)
 
-    def run_path(self, replicate, verbose=False):
+    def run_path(self):
         raise NotImplementedError(
             "Please call the run_path of individual TestingDesc instances"
         )
@@ -169,7 +168,7 @@ class MultiTestingDesc(Desc):
             "Please call the display of the individual TestingDesc instances"
         )
 
-    def save_param(self, replicate):
+    def save_param(self):
         raise NotImplementedError(
             "Please call the save param of the individual TestingDesc instances"
         )

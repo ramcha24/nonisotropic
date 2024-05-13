@@ -18,7 +18,7 @@ def get(dataset_hparams: DatasetHparams, train: bool = True):
 
     # Get the dataset itself.
     if dataset_hparams.dataset_name in registered_datasets:
-        use_augmentation = train and not dataset_hparams.do_not_augment
+        use_augmentation = False  # train and not dataset_hparams.do_not_augment
         if train:
             dataset = registered_datasets[
                 dataset_hparams.dataset_name

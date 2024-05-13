@@ -49,17 +49,18 @@ class Model(base.Model):
         return x
 
     @staticmethod
-    def is_valid_model_name(model_name):
+    def is_valid_model_name(model_name, dataset_name):
         return (
-            model_name.startswith("cifar10_vgg_")
+            dataset_name == "cifar10"
+            and model_name.startswith("cifar10_vgg_")
             and len(model_name.split("_")) == 3
             and model_name.split("_")[2].isdigit()
             and int(model_name.split("_")[2]) in [11, 13, 16, 19]
         )
 
     @staticmethod
-    def get_model_from_name(model_name, initializer, outputs=10):
-        if not Model.is_valid_model_name(model_name):
+    def get_model_from_name(model_name, initializer, dataset_name=None, outputs=10):
+        if not Model.is_valid_model_name(model_name, dataset_name):
             raise ValueError("Invalid model name: {}".format(model_name))
 
         outputs = outputs or 10
@@ -122,22 +123,33 @@ class Model(base.Model):
         return self.criterion
 
     @staticmethod
-    def default_hparams(runner_name):
-        model_hparams = hparams.ModelHparams(
+    def default_model_hparams(
+        model_name=None, dataset_name=None, threat_model=None, model_type=None
+    ):
+        assert threat_model is None
+        assert model_type is None
+        if not Model.is_valid_model_name(model_name, dataset_name):
+            raise ValueError("Invalid model name: {}".format(model_name))
+
+        return hparams.ModelHparams(
             model_name="cifar10_vgg_16",
-            model_init="kaiming_normal",
-            batchnorm_init="uniform",
         )
 
-        dataset_hparams = hparams.DatasetHparams(
-            dataset_name="cifar10",
-            batch_size=128,
-            num_labels=10,
-            num_channels=3,
-            num_spatial_dims=32,
-        )
+    @staticmethod
+    def default_training_hparams(
+        model_name=None, dataset_name=None, threat_model=None, model_type=None
+    ):
+        assert (
+            model_type is None
+        ), "No default training hparams for invalid model_type : {}".format(model_type)
+        assert (
+            threat_model is None
+        ), "No default training hparams for invalid model_type : {}".format(model_type)
 
-        training_hparams = hparams.TrainingHparams(
+        if not Model.is_valid_model_name(model_name, dataset_name):
+            raise ValueError("Invalid model name: {}".format(model_name))
+
+        return hparams.TrainingHparams(
             optimizer_name="sgd",
             momentum=0.9,
             milestone_steps="80ep,120ep",
@@ -146,18 +158,3 @@ class Model(base.Model):
             weight_decay=1e-4,
             training_steps="160ep",
         )
-
-        testing_hparams = hparams.TestingHparams()
-
-        if runner_name == "train":
-            return TrainingDesc(model_hparams, dataset_hparams, training_hparams)
-        elif runner_name == "test":
-            return TestingDesc(
-                model_hparams, dataset_hparams, training_hparams, testing_hparams
-            )
-        else:
-            raise ValueError(
-                "Cannot supply default hparams for an invalid runner - {}".format(
-                    runner_name
-                )
-            )

@@ -14,7 +14,7 @@ class Model(torch.nn.Module, abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def is_valid_model_name(model_name: str) -> bool:
+    def is_valid_model_name(model_name: str, dataset_name: str) -> bool:
         """Is the model name string a valid name for models in this class?"""
 
         pass

@@ -117,7 +117,7 @@ def load_greedy_partition(
         return class_partition_first_half, class_partition_second_half
 
 
-def load_greedy_subset(dataset_hparams):
+def load_greedy_subset(dataset_hparams, per_label=50):
     dataset_loc = os.path.join(
         get_platform().threat_specification_root, dataset_hparams.dataset_name
     )
@@ -126,7 +126,6 @@ def load_greedy_subset(dataset_hparams):
         dataset_hparams.num_spatial_dims,
         dataset_hparams.num_spatial_dims,
     ]
-    per_label = dataset_hparams.greedy_per_label
     num_labels = dataset_hparams.num_labels
     (first_half, second_half) = load_greedy_partition(
         per_label,

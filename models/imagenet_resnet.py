@@ -68,22 +68,23 @@ class Model(base.Model):
         return self.model(x)
 
     @staticmethod
-    def is_valid_model_name(model_name):
+    def is_valid_model_name(model_name, dataset_name=None):
         return (
-            model_name.startswith("imagenet_resnet_")
+            dataset_name == "imagenet"
+            and model_name.startswith("imagenet_resnet_")
             and 4 >= len(model_name.split("_")) >= 3
             and model_name.split("_")[2].isdigit()
             and int(model_name.split("_")[2]) in [18, 34, 50, 101, 152, 200]
         )
 
     @staticmethod
-    def get_model_from_name(model_name, initializer, outputs=1000):
+    def get_model_from_name(model_name, initializer, dataset_name=None, outputs=1000):
         """Name: imagenet_resnet_D[_W].
 
         D is the model depth (e.g., 50 for ResNet-50). W is the model width - the number of filters in the first
         residual layers. By default, this number is 64."""
 
-        if not Model.is_valid_model_name(model_name):
+        if not Model.is_valid_model_name(model_name, dataset_name):
             raise ValueError("Invalid model name: {}".format(model_name))
 
         num = int(model_name.split("_")[2])
@@ -127,49 +128,39 @@ class Model(base.Model):
         return self.criterion
 
     @staticmethod
-    def default_hparams(runner_name):
-        """These hyperparameters will reach 76.1% top-1 accuracy on ImageNet.
+    def default_model_hparams(
+        model_name=None, dataset_name=None, threat_model=None, model_type=None
+    ):
+        assert threat_model is None
+        assert model_type is None
+        if not Model.is_valid_model_name(model_name, dataset_name):
+            raise ValueError("Invalid model name: {}".format(model_name))
 
-        To get these results with a smaller batch size, scale the batch size linearly.
-        That is, batch size 512 -> lr 0.2, 256 -> 0.1, etc.
-        """
-
-        model_hparams = hparams.ModelHparams(
+        return hparams.ModelHparams(
             model_name="imagenet_resnet_50",
-            model_init="kaiming_normal",
-            batchnorm_init="uniform",
         )
 
-        dataset_hparams = hparams.DatasetHparams(
-            dataset_name="imagenet",
-            batch_size=50,
-            num_labels=1000,
-            num_channels=3,
-            num_spatial_dims=224,
-        )
+    @staticmethod
+    def default_training_hparams(
+        model_name=None, dataset_name=None, threat_model=None, model_type=None
+    ):
+        assert (
+            model_type is None
+        ), "No default training hparams for invalid model_type : {}".format(model_type)
+        assert (
+            threat_model is None
+        ), "No default training hparams for invalid model_type : {}".format(model_type)
 
-        training_hparams = hparams.TrainingHparams(
+        if not Model.is_valid_model_name(model_name, dataset_name):
+            raise ValueError("Invalid model name: {}".format(model_name))
+
+        return hparams.TrainingHparams(
             optimizer_name="sgd",
             momentum=0.9,
             milestone_steps="30ep,60ep,80ep",
-            lr=0.4,
+            lr=0.2,
             gamma=0.1,
             weight_decay=1e-4,
             training_steps="90ep",
             warmup_steps="5ep",
         )
-
-        testing_hparams = hparams.TestingHparams()
-
-        if runner_name == "train":
-            return TrainingDesc(model_hparams, dataset_hparams, training_hparams)
-        elif runner_name == "test":
-            return TestingDesc(
-                model_hparams, dataset_hparams, training_hparams, testing_hparams
-            )
-        else:
-            raise ValueError(
-                "Cannot supply default hparams for an invalid runner - {}".format(
-                    runner_name
-                )
-            )

@@ -8,18 +8,16 @@ from platforms.platform import get_platform
 
 from testing.runner import TestingRunner
 
-from multi_testing import multi_test
 from multi_testing.desc import MultiTestingDesc
 
 
 @dataclass
 class MultiTestingRunner(Runner):
-    replicate: int
     multi_desc: MultiTestingDesc
-    # multi_run: list[TestingRunner]
+    multi_test_replicate: int = 1
     verbose: bool = True
     evaluate_batch_only: bool = True
-    num_sub_runners: int = 16
+    multi_train_replicate: int = 1
 
     @staticmethod
     def description():
@@ -27,17 +25,44 @@ class MultiTestingRunner(Runner):
 
     @staticmethod
     def add_args(parser: argparse.ArgumentParser) -> None:
-        # shared_args.JobArgs.add_args(parser)
         defaults_list = shared_args.maybe_get_default_hparams(runner_name="multi_test")
         MultiTestingDesc.add_args(parser, defaults_list)
 
     @staticmethod
     def create_from_args(args: argparse.Namespace) -> "MultiTestingRunner":
+        multi_desc = MultiTestingDesc.create_from_args(args)
+        multi_test_replicate = args.test_replicate if args.test_replicate != -1 else 1
+        verbose = not args.quiet
+        evaluate_batch_only = args.evaluate_only_batch_test
+        multi_train_replicate = (
+            args.train_replicate if args.train_replicate != -1 else 1
+        )
+        # infer train replicate number if not provided
+        model_type = multi_desc[
+            0
+        ].model_hparams.model_type  # assuming homogenous model type
+        if args.train_replicate == -1:
+            if model_type is None:
+                multi_train_replicate = 1
+            elif model_type == "pretrained":
+                multi_train_replicate = (
+                    None  # No training replicate for pretrained models
+                )
+            elif model_type == "finetuned":
+                multi_train_replicate = 1
+            else:
+                raise ValueError(
+                    f"Cannot infer common train replicate number for unknown model type {model_type}"
+                )
+        else:
+            multi_train_replicate = args.train_replicate
+
         return MultiTestingRunner(
-            args.replicate,
-            MultiTestingDesc.create_from_args(args),
-            not args.quiet,
-            args.evaluate_only_batch_test,
+            multi_desc,
+            multi_test_replicate,
+            verbose,
+            evaluate_batch_only,
+            multi_train_replicate,
         )
 
     def create_sub_runners(self):
@@ -45,7 +70,11 @@ class MultiTestingRunner(Runner):
         for desc in self.multi_desc.desc_list:
             sub_runner_list.append(
                 TestingRunner(
-                    self.replicate, desc, self.verbose, self.evaluate_batch_only
+                    desc,
+                    self.multi_test_replicate,
+                    self.verbose,
+                    self.evaluate_batch_only,
+                    self.multi_train_replicate,
                 )
             )
         return sub_runner_list
@@ -54,11 +83,12 @@ class MultiTestingRunner(Runner):
         return len(self.multi_desc.desc_list)
 
     def display_output_location(self):
-        for desc_index, desc in enumerate(self.multi_desc.desc_list):
-            full_run_path, _ = desc.run_path(self.replicate, verbose=self.verbose)
+        desc_list = getattr(self.multi_desc, "desc_list")
+        for desc_index, desc in enumerate(desc_list):
+            logger_paths = desc.run_path(self.multi_train_replicate, self.multi_test_replicate, verbose=False)
             print(
                 "\n Output Location for subrunner {} : {} ".format(
-                    desc_index, full_run_path
+                    desc_index, logger_paths["test_run_path"]
                 )
             )
 
@@ -66,15 +96,15 @@ class MultiTestingRunner(Runner):
         if self.verbose and get_platform().is_primary_process:
             print(
                 "=" * 82
-                + f"\n Multi-Testing with {self.get_num_sub_runners()} sub-runners (Replicate {self.replicate})\n"
+                + f"\n Multi-Testing with {self.get_num_sub_runners()} sub-runners (Replicate {self.multi_test_replicate})\n"
                 + "-" * 82
             )
 
-        sub_runner_list = self.create_sub_runner()
+        sub_runner_list = self.create_sub_runners()
         for sub_runner_index, sub_runner in enumerate(sub_runner_list):
             print(
                 "=" * 82
-                + f"\n Testing Runner {sub_runner_index} (Replicate {self.replicate})\n"
+                + f"\n Testing Runner {sub_runner_index} (Replicate {sub_runner.test_replicate})\n"
                 + "-" * 82
             )
             sub_runner.run()

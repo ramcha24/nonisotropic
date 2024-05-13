@@ -10,7 +10,7 @@ import datasets.registry
 from foundations import hparams
 from foundations import paths
 from foundations.step import Step
-from foundations.desc import TrainingDesc
+from training.desc import TrainingDesc
 
 from models.base import Model, DistributedDataParallel
 import models.registry
@@ -99,11 +99,7 @@ def train(
     if end_step <= start_step:
         return
 
-    if (
-        augment_hparams.N_project
-        or augment_hparams.N_mixup
-        or training_hparams.N_adv_train
-    ):
+    if augment_hparams.N_aug or training_hparams.N_adv_train:
         greedy_subsets = load_greedy_subset(dataset_hparams)
 
     if augment_hparams.mixup:
@@ -116,10 +112,11 @@ def train(
         )
 
         for iteration, (examples, labels) in enumerate(train_loader):
-            augmentation_flag = True
-            # (
-            #     torch.rand(1).item() <= dataset_hparams.augmentation_frequency
-            # )
+            if iteration % 10 == 0 and get_platform().is_primary_process:
+                print("Epoch: {}, Iteration: {}".format(epoch, iteration))
+            augmentation_flag = (
+                True  # torch.rand(1).item() <= dataset_hparams.augmentation_frequency
+            )
 
             # Advance the data loader until the start epoch and iteration
             if epoch == start_step.ep and iteration < start_step.it:
@@ -141,59 +138,53 @@ def train(
             examples_list = []
             examples_list.append(examples)
 
-            if augment_hparams.N_mixup and augmentation_flag:
+            if augment_hparams.N_aug and augmentation_flag:
+                # mixup augmentation
                 shuffle_indices = torch.randperm(len(labels))
                 perturbed_examples = non_isotropic_projection(
                     examples,
                     labels,
                     examples[shuffle_indices],
                     greedy_subsets,
-                    threshold=dataset_hparams.N_threshold,
+                    threshold=augment_hparams.N_threshold,
                     # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                 )
-                examples.list(perturbed_examples)
-                # examples = torch.cat((examples, perturbed_examples), dim=0)
-                # labels = torch.cat((labels, labels), dim=0)
+                examples_list.append(perturbed_examples)
 
-            if augmentation_flag and (
-                dataset_hparams.gaussian_augment or augment_hparams.N_project
-            ):
+                # projection augmentation
+
                 perturbation = torch.zeros_like(examples).to(
                     device=get_platform().torch_device
                 )
                 perturbation.normal_(
-                    dataset_hparams.gaussian_aug_mean,
-                    10 * dataset_hparams.gaussian_aug_std,
+                    augment_hparams.gaussian_aug_mean,
+                    10 * augment_hparams.gaussian_aug_std,
                 )
 
-                if augment_hparams.N_project:
-                    perturbed_examples = non_isotropic_projection(
-                        examples,
-                        labels,
-                        perturbation,
-                        greedy_subsets,
-                        threshold=dataset_hparams.N_threshold,
-                        # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
-                    )
-                    perturbation = perturbed_examples - examples
+                perturbed_examples = non_isotropic_projection(
+                    examples,
+                    labels,
+                    perturbation,
+                    greedy_subsets,
+                    threshold=augment_hparams.N_threshold,
+                    # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
+                )
+                perturbation = perturbed_examples - examples
 
                 perturbation = torch.min(
                     torch.max(perturbation.detach(), -examples), 1 - examples
                 )  # clip examples+perturbation to [0,1]
 
                 examples_list.append(examples + perturbation)
-                # examples = torch.cat((examples, examples + perturbation), dim=0)
-                # labels = torch.cat((labels, labels), dim=0)
+                del perturbed_examples, perturbation
 
             if (
-                training_hparams.N_adv_train or training_hparams.adv_train
-            ) and epoch >= training_hparams.adv_train_start_epoch:
+                training_hparams.adv_train
+                and epoch >= training_hparams.adv_train_start_epoch
+            ):
                 attack_fn = get_attack(training_hparams)
 
                 attack_power = training_hparams.adv_train_attack_power
-
-                if training_hparams.N_adv_train:
-                    attack_power *= 10
 
                 perturbation = attack_fn(
                     model,
@@ -203,30 +194,45 @@ def train(
                     attack_power / 10,
                     training_hparams.adv_train_attack_iter,
                 )
-                perturbation[perturbation != perturbation] = 0
-
-                # lets do some journalism to see if its faithful. and it works!
-                # if (epoch % 2 == 0) and (iteration == 0):
-                #    report_adv(model, examples, labels, perturbation)
-
-                if training_hparams.N_adv_train:
-                    perturbed_examples = non_isotropic_projection(
-                        examples,
-                        labels,
-                        examples + perturbation,
-                        greedy_subsets,
-                        threshold=training_hparams.N_threshold,
-                        # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
-                    )
-                    perturbation = perturbed_examples - examples
-
                 perturbation = torch.min(
                     torch.max(perturbation.detach(), -examples), 1 - examples
                 )  # clip examples+perturbation to [0,1]
 
                 examples_list.append(examples + perturbation)
-                # examples = torch.cat((examples, examples + perturbation), dim=0)
-                # labels = torch.cat((labels, labels), dim=0)
+
+                del perturbation
+
+            if (
+                training_hparams.N_adv_train
+                and epoch >= training_hparams.adv_train_start_epoch
+            ):
+                attack_fn = get_attack(training_hparams)
+                attack_power = training_hparams.adv_train_attack_power * 10
+                perturbation = attack_fn(
+                    model,
+                    examples,
+                    labels,
+                    attack_power,
+                    attack_power / 10,
+                    training_hparams.adv_train_attack_iter,
+                )
+
+                perturbed_examples = non_isotropic_projection(
+                    examples,
+                    labels,
+                    examples + perturbation,
+                    greedy_subsets,
+                    threshold=training_hparams.N_threshold,
+                    # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
+                )
+                perturbation = perturbed_examples - examples
+                perturbation[perturbation != perturbation] = 0
+                perturbation = torch.min(
+                    torch.max(perturbation.detach(), -examples), 1 - examples
+                )  # clip examples+perturbation to [0,1]
+
+                examples_list.append(examples + perturbation)
+                del perturbation, perturbed_examples
 
             step_optimizer.zero_grad()
             model.train()
@@ -240,13 +246,12 @@ def train(
                 return
 
             loss = 0.0
-            for inputs in examples_list:
-                loss += model.loss_criterion(model(inputs), labels)
+            for perturbed_examples in examples_list:
+                loss += model.loss_criterion(model(perturbed_examples), labels)
 
             if augment_hparams.mixup:
                 mixup_examples, mixup_labels = mixup(examples, labels)
                 loss += model.loss_criterion(model(mixup_examples), mixup_labels)
-            # loss = model.loss_criterion(model(examples), labels)
 
             if loss.isnan().any() and get_platform().is_primary_process:
                 print(
@@ -254,10 +259,10 @@ def train(
                         epoch, iteration
                     )
                 )
+                # Consider torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
                 return
 
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
 
             # Step forward. Ignore warnings that the lr_schedule generates.
             step_optimizer.step()
@@ -277,11 +282,13 @@ def standard_train(
     evaluate_every_few_epoch: int = 10,
 ):
     """Train using the standard callbacks according to the provided hparams."""
+    already_trained = False
     if desc.model_hparams.model_type == "pretrained":
-        # check if model exists at the expected location.
-        return
+        file_names = get_platform().listdir(output_location)
+        for file in file_names:
+            if file.endswith(".pt"):
+                already_trained = True
     else:
-        # model_type is either None or finetuned
         # If the model file for the end of training already exists in this location, do not train
         iterations_per_epoch = datasets.registry.iterations_per_epoch(
             desc.dataset_hparams
@@ -292,7 +299,10 @@ def standard_train(
         if models.registry.exists(
             output_location, train_end_step
         ) and get_platform().exists(paths.logger(output_location)):
-            return
+            already_trained = True
+
+    if already_trained:
+        return
 
     # need to train a model, get its initialized/pretrained weights
     model = models.registry.get(desc.dataset_hparams.dataset_name, desc.model_hparams)
