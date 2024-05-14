@@ -88,12 +88,15 @@ class Dataset(base.ImageDataset):
         transforms = (
             Dataset._augment_transforms() if use_augmentation else Dataset._transforms()
         )
-        return Dataset(os.path.join(get_platform().imagenet_root, "train"), transforms)
+        return Dataset(
+            os.path.join(get_platform().dataset_root, "imagenet", "train"), transforms
+        )
 
     @staticmethod
     def get_test_set():
         return Dataset(
-            os.path.join(get_platform().imagenet_root, "val"), Dataset._transforms()
+            os.path.join(get_platform().dataset_root, "imagenet", "val"),
+            Dataset._transforms(),
         )
 
     @staticmethod

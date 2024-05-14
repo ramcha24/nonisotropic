@@ -33,7 +33,3 @@ class Platform(base.Platform):
     @property
     def threat_specification_root(self):
         return os.path.join(pathlib.Path.home(), "nonisotropic/threat_specification")
-
-    @property
-    def imagenet_root(self):
-        return os.path.join(pathlib.Path.home(), "nonisotropic/datasets/imagenet")

@@ -101,12 +101,6 @@ class Platform(Hparams):
         """The root directory where datasets will be stored"""
         pass
 
-    @property
-    @abc.abstractmethod
-    def imagenet_root(self):
-        """The directory where imagenet will be stored."""
-        pass
-
     # Mediate access to files
 
     @staticmethod

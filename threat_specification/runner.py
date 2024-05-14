@@ -8,6 +8,7 @@ from threat_specification.desc import ThreatDesc
 from threat_specification.greedy_subset import save_greedy_partition
 from platforms.platform import get_platform
 from foundations import paths
+from datasets.partition import save_class_partition
 
 
 class ThreatRunner(Runner):
@@ -56,8 +57,7 @@ class ThreatRunner(Runner):
         self.desc.save_param(self.threat_replicate)
 
         # check if there is class-wise partitioning for the dataset. If not, create one
-        if not os.path.exists(paths.get_class_partition_path(dataset_name)):
-            save_class_partition(dataset_name)
+        save_class_partition(dataset_name)
 
         # run the threat specification
         per_label_array = self.desc.threat_hparams.per_label_array
