@@ -228,12 +228,27 @@ class DatasetHparams(Hparams):
 
 
 @dataclass
+class ThreatHparams(Hparams):
+    per_label_array: list[int] = [10, 20, 30, 40, 50]
+    subset_selection: "greedy"
+    subset_selection_seed: int = None
+    domain_expansion_factor: int = 10
+
+    _name: str = "Threat Specification Hyperparameters"
+    _description: str = "Hyperparameters that specify the threat specification."
+    _per_label_array: str = "Array of per label values"
+    _subset_selection: str = "Algorithm to choose anchor points (defualt : greedy)"
+    _subset_selection_seed: str = "Set a random seed for subset selection"
+    _domain_expansion_factor: str = "Factor to expand the domain must be less than train_size/(2*num_labels*per_label). default : 10"
+
+
+@dataclass
 class AugmentationHparams(Hparams):
     augmentation_frequency: int = 3
     gaussian_aug_mean: float = 0.0
     gaussian_aug_std: float = 1.0
     greedy_per_label: int = 50
-    N_threshold: float = 0.4
+    N_threshold: float = 0.3
     N_aug: bool = False
     mixup: bool = False
 
@@ -290,10 +305,10 @@ class TrainingHparams(Hparams):
     adv_train: bool = False
     adv_train_attack_type: str = "PGD"
     adv_train_attack_norm: str = "Linf"
-    adv_train_attack_power: float = 1.5
-    adv_train_attack_iter: int = 20
+    adv_train_attack_power: float = 8 / 255  # 1.5
+    adv_train_attack_iter: int = 8
     adv_train_start_epoch: int = 30
-    N_threshold: float = 0.4
+    N_threshold: float = 0.3
     N_adv_train: bool = False
 
     _name: str = "Training Hyperparameters"
@@ -334,9 +349,9 @@ class TestingHparams(Hparams):
     standard_eval: bool = False
     adv_eval: bool = False
     N_adv_eval: bool = False
-    adv_test_attack_norm: str = "2"
-    adv_attack_size_l2: float = 1.5
-    adv_attack_size_linf: float = 8 / 255
+    adv_test_attack_type: str = "auto"
+    adv_test_attack_norm: str = "Linf"
+    adv_test_attack_power: float = 8 / 255  # 1.5
 
     _name: str = "Testing Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is tested."

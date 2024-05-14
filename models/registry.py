@@ -6,6 +6,7 @@ from models import (
     mnist_lenet,
     mnist_conv,
     cifar10_vgg,
+    cifar100_resnet,
     imagenet_resnet,
     robustbench,
 )
@@ -18,6 +19,7 @@ registered_models = [
     mnist_conv.Model,
     cifar10_resnet.Model,
     cifar10_vgg.Model,
+    cifar100_resnet.Model,
     imagenet_resnet.Model,
 ]
 

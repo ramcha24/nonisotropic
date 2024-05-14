@@ -23,6 +23,7 @@ class JobArgs(hparams.Hparams):
     evaluate_only_at_end: bool = False
     evaluate_every_few_epoch: int = 2  # 0
     evaluate_only_batch_test: bool = False
+    threat_replicate: int = 1
     train_replicate: int = -1
     test_replicate: int = -1
 
@@ -43,6 +44,9 @@ class JobArgs(hparams.Hparams):
     )
     _evaluate_every_few_epoch: str = (
         "Evaluate validation runner every few epochs, default is 10"
+    )
+    _threat_replicate: str = (
+        "The replicate number for threat specification. default is 1"
     )
     _train_replicate: str = (
         "The replicate number for training. -1 means no replicate number is specified."

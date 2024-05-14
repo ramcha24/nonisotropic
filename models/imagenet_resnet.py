@@ -158,7 +158,7 @@ class Model(base.Model):
             optimizer_name="sgd",
             momentum=0.9,
             milestone_steps="30ep,60ep,80ep",
-            lr=0.2,
+            lr=0.1,
             gamma=0.1,
             weight_decay=1e-4,
             training_steps="90ep",

@@ -38,7 +38,10 @@ class MultiTestingRunner(Runner):
             args.train_replicate if args.train_replicate != -1 else 1
         )
         # infer train replicate number if not provided
-        model_type = multi_desc[
+        # print(multi_desc.desc_list)
+        desc_list = getattr(multi_desc, "desc_list")
+
+        model_type = desc_list[
             0
         ].model_hparams.model_type  # assuming homogenous model type
         if args.train_replicate == -1:
@@ -67,7 +70,8 @@ class MultiTestingRunner(Runner):
 
     def create_sub_runners(self):
         sub_runner_list = []
-        for desc in self.multi_desc.desc_list:
+        desc_list = getattr(self.multi_desc, "desc_list")
+        for desc in desc_list:
             sub_runner_list.append(
                 TestingRunner(
                     desc,
@@ -80,12 +84,15 @@ class MultiTestingRunner(Runner):
         return sub_runner_list
 
     def get_num_sub_runners(self):
-        return len(self.multi_desc.desc_list)
+        desc_list = getattr(self.multi_desc, "desc_list")
+        return len(desc_list)
 
     def display_output_location(self):
         desc_list = getattr(self.multi_desc, "desc_list")
         for desc_index, desc in enumerate(desc_list):
-            logger_paths = desc.run_path(self.multi_train_replicate, self.multi_test_replicate, verbose=False)
+            logger_paths = desc.run_path(
+                self.multi_train_replicate, self.multi_test_replicate, verbose=False
+            )
             print(
                 "\n Output Location for subrunner {} : {} ".format(
                     desc_index, logger_paths["test_run_path"]

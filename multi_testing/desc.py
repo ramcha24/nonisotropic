@@ -70,7 +70,6 @@ class MultiTestingDesc(Desc):
         num_training_selected = sum(selected_training_toggle_args)
 
         toggle_choices = [True, False]
-
         desc_list = []
         for defaults_index in index_list:
             prefix_str = str("multi_test_") + str(defaults_index)

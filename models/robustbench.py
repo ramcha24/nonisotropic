@@ -45,9 +45,6 @@ class Model(base.Model):
         ), "Only Linf threat specification is allowed for pretrained models."
         assert dataset_name in ["cifar10", "cifar100", "imagenet"]
 
-        # threat_model = model_name.split("_")[0]
-        # pretrained_model_name = model_name.split("_")[1]
-
         # WHAT ABOUT DATA PREPROCESSING
 
         pretrained_model = load_model(
@@ -78,8 +75,6 @@ class Model(base.Model):
             model_source="robustbenchmark",
             threat_model=threat_model,
         )
-
-    # THREAT MODEL IS SUPERFICIAL. ONLY Linf.
 
     @staticmethod
     def default_training_hparams(

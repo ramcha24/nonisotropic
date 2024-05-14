@@ -88,7 +88,6 @@ class Dataset(base.ImageDataset):
         transforms = (
             Dataset._augment_transforms() if use_augmentation else Dataset._transforms()
         )
-        print(get_platform().imagenet_root)
         return Dataset(os.path.join(get_platform().imagenet_root, "train"), transforms)
 
     @staticmethod
@@ -106,7 +105,7 @@ class Dataset(base.ImageDataset):
     def default_dataset_hparams() -> "hparams.DatasetHparams":
         return hparams.DatasetHparams(
             dataset_name="imagenet",
-            batch_size=128,
+            batch_size=50,
             num_labels=1000,
             num_channels=3,
             num_spatial_dims=224,

@@ -52,6 +52,8 @@ class Desc(abc.ABC):
 
         if type_str == "dataset":
             hparams_strs = self.class_select(hparams.DatasetHparams)
+        elif type_str == "threat":
+            hparams_strs = self.class_select(hparams.ThreatHparams)
         elif type_str == "augment":
             hparams_strs = self.class_select(hparams.AugmentationHparams)
         elif type_str == "model":

@@ -3,7 +3,7 @@ import argparse
 from dataclasses import dataclass, asdict, field, fields
 import os
 from itertools import product
-
+import json
 
 from datasets import registry as datasets_registry
 from foundations import desc
@@ -68,11 +68,14 @@ class MultiTrainingDesc(desc.Desc):
         num_training_selected = sum(selected_training_toggle_args)
 
         toggle_choices = [True, False]
+        # print(json.dumps(vars(args), indent=4))
 
         desc_list = []
         for defaults_index in index_list:
-            prefix_str = str("multi_test_") + str(defaults_index)
-            if hasattr(args, prefix_str + "_model_name"):
+            prefix_str = str("multi_train_") + str(defaults_index)
+            model_name_key = prefix_str + "_model_name"
+
+            if hasattr(args, model_name_key):
                 model_hparams = ModelHparams.create_from_args(args, prefix=prefix_str)
                 dataset_hparams = DatasetHparams.create_from_args(
                     args, prefix=prefix_str
@@ -134,8 +137,6 @@ class MultiTrainingDesc(desc.Desc):
                                 modified_training_hparams,
                             )
                         )
-                else:
-                    raise ValueError(f"Model type {model_type} is an invalid argument")
 
         multi_desc = MultiTrainingDesc(desc_list=desc_list)
         return multi_desc

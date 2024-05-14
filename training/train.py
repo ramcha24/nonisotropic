@@ -2,7 +2,8 @@ import typing
 import warnings
 import torch
 from torchvision.transforms import v2
-
+import numpy as np
+from torch.autograd import Variable
 
 from datasets.base import DataLoader
 import datasets.registry
@@ -26,6 +27,30 @@ from utilities.evaluation_utils import report_adv
 
 from threat_specification.projected_displacement import non_isotropic_projection
 from threat_specification.greedy_subset import load_greedy_subset
+
+
+def mixup_data(x, y, alpha=1.0, use_cuda=True):
+
+    """Compute the mixup data. Return mixed inputs, pairs of targets, and lambda"""
+    if alpha > 0.0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1.0
+    batch_size = x.size()[0]
+    if use_cuda:
+        index = torch.randperm(batch_size).to(get_platform().torch_device)
+    else:
+        index = torch.randperm(batch_size)
+
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
+def mixup_criterion(y_a, y_b, lam):
+    return lambda criterion, pred: lam * criterion(pred, y_a) + (1 - lam) * criterion(
+        pred, y_b
+    )
 
 
 def train(
@@ -103,7 +128,7 @@ def train(
         greedy_subsets = load_greedy_subset(dataset_hparams)
 
     if augment_hparams.mixup:
-        mixup = v2.transforms.MixUp(num_classes=dataset_hparams.num_labels)
+        mixup = v2.MixUp(num_classes=dataset_hparams.num_labels)
 
     # The training loop.
     for epoch in range(start_step.ep, end_step.ep + 1):
@@ -112,10 +137,12 @@ def train(
         )
 
         for iteration, (examples, labels) in enumerate(train_loader):
-            if iteration % 10 == 0 and get_platform().is_primary_process:
-                print("Epoch: {}, Iteration: {}".format(epoch, iteration))
+            # if iteration % 10 == 0 and get_platform().is_primary_process:
+            #     print("Epoch: {}, Iteration: {}".format(epoch, iteration))
             augmentation_flag = (
-                True  # torch.rand(1).item() <= dataset_hparams.augmentation_frequency
+                # True  #
+                torch.rand(1).item()
+                <= (1 / augment_hparams.augmentation_frequency) + 1e-2
             )
 
             # Advance the data loader until the start epoch and iteration
@@ -135,13 +162,30 @@ def train(
             examples = examples.to(device=get_platform().torch_device)
             labels = labels.to(device=get_platform().torch_device)
 
-            examples_list = []
-            examples_list.append(examples)
+            examples_N_aug = torch.empty((0,), dtype=torch.float32).to(
+                device=get_platform().torch_device
+            )
+            examples_adv_train = torch.empty((0,), dtype=torch.float32).to(
+                device=get_platform().torch_device
+            )
+            examples_N_adv_train = torch.empty((0,), dtype=torch.float32).to(
+                device=get_platform().torch_device
+            )
+
+            labels_N_aug = torch.empty((0,), dtype=torch.int64).to(
+                device=get_platform().torch_device
+            )
+            labels_adv_train = torch.empty((0,), dtype=torch.int64).to(
+                device=get_platform().torch_device
+            )
+            labels_N_adv_train = torch.empty((0,), dtype=torch.int64).to(
+                device=get_platform().torch_device
+            )
 
             if augment_hparams.N_aug and augmentation_flag:
                 # mixup augmentation
                 shuffle_indices = torch.randperm(len(labels))
-                perturbed_examples = non_isotropic_projection(
+                examples_N_aug = non_isotropic_projection(
                     examples,
                     labels,
                     examples[shuffle_indices],
@@ -149,7 +193,7 @@ def train(
                     threshold=augment_hparams.N_threshold,
                     # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                 )
-                examples_list.append(perturbed_examples)
+                labels_N_aug = labels.clone()
 
                 # projection augmentation
 
@@ -161,22 +205,30 @@ def train(
                     10 * augment_hparams.gaussian_aug_std,
                 )
 
-                perturbed_examples = non_isotropic_projection(
-                    examples,
-                    labels,
-                    perturbation,
-                    greedy_subsets,
-                    threshold=augment_hparams.N_threshold,
-                    # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
+                examples_N_aug = torch.cat(
+                    (
+                        examples_N_aug,
+                        non_isotropic_projection(
+                            examples,
+                            labels,
+                            perturbation,
+                            greedy_subsets,
+                            threshold=augment_hparams.N_threshold,
+                            # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
+                        ),
+                    ),
+                    dim=0,
                 )
-                perturbation = perturbed_examples - examples
+                labels_N_aug = torch.cat((labels_N_aug, labels), dim=0)
 
-                perturbation = torch.min(
-                    torch.max(perturbation.detach(), -examples), 1 - examples
-                )  # clip examples+perturbation to [0,1]
+                # perturbation = perturbed_examples - examples
 
-                examples_list.append(examples + perturbation)
-                del perturbed_examples, perturbation
+                # perturbation = torch.min(
+                #    torch.max(perturbation.detach(), -examples), 1 - examples
+                # )  # clip examples+perturbation to [0,1]
+
+                # examples_list.append(examples + perturbation)
+                # del perturbed_examples, perturbation
 
             if (
                 training_hparams.adv_train
@@ -186,7 +238,7 @@ def train(
 
                 attack_power = training_hparams.adv_train_attack_power
 
-                perturbation = attack_fn(
+                examples_adv_train = examples + attack_fn(
                     model,
                     examples,
                     labels,
@@ -194,20 +246,21 @@ def train(
                     attack_power / 10,
                     training_hparams.adv_train_attack_iter,
                 )
-                perturbation = torch.min(
-                    torch.max(perturbation.detach(), -examples), 1 - examples
-                )  # clip examples+perturbation to [0,1]
+                labels_adv_train = labels.clone()
+                # perturbation = torch.min(
+                #    torch.max(perturbation.detach(), -examples), 1 - examples
+                # )  # clip examples+perturbation to [0,1]
 
-                examples_list.append(examples + perturbation)
+                # examples_list.append(examples + perturbation)
 
-                del perturbation
+                # del perturbation
 
             if (
                 training_hparams.N_adv_train
                 and epoch >= training_hparams.adv_train_start_epoch
             ):
                 attack_fn = get_attack(training_hparams)
-                attack_power = training_hparams.adv_train_attack_power * 10
+                attack_power = training_hparams.adv_train_attack_power * 4
                 perturbation = attack_fn(
                     model,
                     examples,
@@ -217,7 +270,7 @@ def train(
                     training_hparams.adv_train_attack_iter,
                 )
 
-                perturbed_examples = non_isotropic_projection(
+                examples_N_adv_train = non_isotropic_projection(
                     examples,
                     labels,
                     examples + perturbation,
@@ -225,17 +278,48 @@ def train(
                     threshold=training_hparams.N_threshold,
                     # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                 )
-                perturbation = perturbed_examples - examples
-                perturbation[perturbation != perturbation] = 0
-                perturbation = torch.min(
-                    torch.max(perturbation.detach(), -examples), 1 - examples
-                )  # clip examples+perturbation to [0,1]
+                labels_N_adv_train = labels.clone()
+                # perturbation = perturbed_examples - examples
+                # perturbation[perturbation != perturbation] = 0
 
-                examples_list.append(examples + perturbation)
-                del perturbation, perturbed_examples
+                # perturbation = torch.min(
+                #    torch.max(perturbation.detach(), -examples), 1 - examples
+                # )  # clip examples+perturbation to [0,1]
 
+                # torch.cat(example, examples + perturbation, dim=0)
+                # examples_list.append(examples + perturbation)
+                # del perturbation, perturbed_examples
+            if augment_hparams.mixup:
+                mixup_examples, labels_a, labels_b, lambda_val = mixup_data(
+                    examples.clone(), labels.clone()
+                )
+
+                # mixup_examples, mixup_labels = mixup(
+                #     examples.detach().clone(), labels.detach().clone()
+                # )
+
+            examples = torch.cat(
+                (examples, examples_N_aug, examples_adv_train, examples_N_adv_train),
+                dim=0,
+            )
+            labels = torch.cat(
+                (labels, labels_N_aug, labels_adv_train, labels_N_adv_train), dim=0
+            )
+            # examples = torch.cat((examples, perturbed_examples), dim=0)
+            # labels = torch.cat((labels, labels), dim=0)
             step_optimizer.zero_grad()
             model.train()
+
+            mixup_loss = 0.0
+            if augment_hparams.mixup:
+                mixup_examples, labels_a, labels_b = (
+                    Variable(mixup_examples),
+                    Variable(labels_a),
+                    Variable(labels_b),
+                )
+                mixup_outputs = model(mixup_examples)
+                loss_func = mixup_criterion(labels_a, labels_b, lambda_val)
+                mixup_loss += loss_func(model.loss_criterion, mixup_outputs)
 
             if examples.isnan().any() and get_platform().is_primary_process:
                 print(
@@ -245,15 +329,20 @@ def train(
                 )
                 return
 
-            loss = 0.0
-            for perturbed_examples in examples_list:
-                loss += model.loss_criterion(model(perturbed_examples), labels)
+            loss = model.loss_criterion(model(examples), labels)
+            overall_loss = loss + mixup_loss
 
-            if augment_hparams.mixup:
-                mixup_examples, mixup_labels = mixup(examples, labels)
-                loss += model.loss_criterion(model(mixup_examples), mixup_labels)
+            # if augment_hparams.mixup:
+            #     loss += loss_func(model.loss_criterion, mixup_outputs)
 
-            if loss.isnan().any() and get_platform().is_primary_process:
+            # loss = 0.0
+            # for perturbed_examples in examples_list:
+            #     loss += model.loss_criterion(model(perturbed_examples), labels)
+
+            # if augment_hparams.mixup:
+            #    loss += model.loss_criterion(model(mixup_examples), mixup_labels)
+
+            if overall_loss.isnan().any() and get_platform().is_primary_process:
                 print(
                     "Warning!!! Loss is NaN at epoch {}, iteration {}".format(
                         epoch, iteration
@@ -262,7 +351,7 @@ def train(
                 # Consider torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
                 return
 
-            loss.backward()
+            overall_loss.backward()
 
             # Step forward. Ignore warnings that the lr_schedule generates.
             step_optimizer.step()

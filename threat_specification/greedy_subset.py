@@ -29,12 +29,8 @@ def get_greedy_subset_partition(domain, num_points):
     return subset_domain
 
 
-def save_greedy_partition(dataset_hparams, per_label):
-    # only find greedy subsets from the training data.
-    dataset_loc = os.path.join(
-        get_platform().threat_specification_root, dataset_hparams.dataset_name
-    )
-    dir_path = os.path.join(dataset_loc, "per_label_" + str(per_label))
+def save_greedy_partition(run_path, dataset_hparams, per_label):
+    dir_path = os.path.join(run_path, "per_label_" + str(per_label))
     get_platform().makedirs(dir_path)
     num_labels = dataset_hparams.num_labels
 

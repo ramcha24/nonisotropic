@@ -41,7 +41,7 @@ class Model(base.Model):
     def __init__(self, model_name, plan, initializer, outputs=None):
         super(Model, self).__init__()
         self.model_name = model_name
-        outputs = outputs or 10
+        outputs = outputs or 100
 
         # Initial convolution.
         current_filters = plan[0][0]
@@ -79,8 +79,8 @@ class Model(base.Model):
     @staticmethod
     def is_valid_model_name(model_name, dataset_name=None):
         return (
-            dataset_name == "cifar10"
-            and model_name.startswith("cifar10_resnet_")
+            dataset_name == "cifar100"
+            and model_name.startswith("cifar100_resnet_")
             and 5 > len(model_name.split("_")) > 2
             and all([x.isdigit() and int(x) > 0 for x in model_name.split("_")[2:]])
             and (int(model_name.split("_")[2]) - 2) % 6 == 0
@@ -88,8 +88,8 @@ class Model(base.Model):
         )
 
     @staticmethod
-    def get_model_from_name(model_name, initializer, dataset_name=None, outputs=10):
-        """The naming scheme for a ResNet is 'cifar_resnet_N[_W]'.
+    def get_model_from_name(model_name, initializer, dataset_name=None, outputs=100):
+        """The naming scheme for a ResNet is 'cifar100_resnet_N[_W]'.
 
         The ResNet is structured as an initial convolutional layer followed by three "segments"
         and a linear output layer. Each segment consists of D blocks. Each block is two

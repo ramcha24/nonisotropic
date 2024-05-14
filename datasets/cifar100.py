@@ -15,7 +15,7 @@ from foundations import hparams
 
 
 class CIFAR100(torchvision.datasets.CIFAR100):
-    """A subclass to suppress an annoying print statement in the torchvision CIFAR-10 library.
+    """A subclass to suppress an annoying print statement in the torchvision CIFAR-100 library.
 
     Not strictly necessary - you can just use `torchvision.datasets.CIFAR10 if the print
     message doesn't bother you.
@@ -86,7 +86,7 @@ class Dataset(base.ImageDataset):
     def default_dataset_hparams() -> "hparams.DatasetHparams":
         return hparams.DatasetHparams(
             dataset_name="cifar100",
-            batch_size=128,
+            batch_size=256,
             num_labels=100,
             num_channels=3,
             num_spatial_dims=32,

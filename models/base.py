@@ -85,3 +85,11 @@ class DistributedDataParallel(Model, torch.nn.parallel.DistributedDataParallel):
 
     def save(self, save_location: str, save_step: Step):
         self.module.save(save_location, save_step)
+
+    @staticmethod
+    def default_model_hparams() -> "hparams.ModelHparams":
+        raise NotImplementedError
+
+    @staticmethod
+    def default_training_hparams() -> "hparams.TrainingHparams":
+        raise NotImplementedError

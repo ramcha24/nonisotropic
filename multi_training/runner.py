@@ -30,17 +30,20 @@ class MultiTrainingRunner(Runner):
     @staticmethod
     def create_from_args(args: argparse.Namespace) -> "MultiTrainingRunner":
         multi_desc = MultiTrainingDesc.create_from_args(args)
+        desc_list = getattr(multi_desc, "desc_list")
+        # print("Inside create_from_args the list is of size {}".format(len(desc_list)))
         verbose = not args.quiet
         evaluate_every_epoch = not args.evaluate_only_at_end
         evaluate_every_few_epoch = (
             args.evaluate_every_few_epoch if args.evaluate_every_few_epoch else 10
         )
-        multi_train_replicate = args.train_replicate if args.train_replicate != -1 else 1
+        multi_train_replicate = (
+            args.train_replicate if args.train_replicate != -1 else 1
+        )
 
         return MultiTrainingRunner(
             multi_desc,
             verbose,
-            evaluate_every_epoch,
             evaluate_every_epoch,
             evaluate_every_few_epoch,
             multi_train_replicate,
@@ -48,7 +51,8 @@ class MultiTrainingRunner(Runner):
 
     def create_sub_runners(self):
         sub_runner_list = []
-        for desc in self.multi_desc.desc_list:
+        desc_list = getattr(self.multi_desc, "desc_list")
+        for desc in desc_list:
             sub_runner_list.append(
                 TrainingRunner(
                     desc,
@@ -61,17 +65,20 @@ class MultiTrainingRunner(Runner):
         return sub_runner_list
 
     def get_num_sub_runners(self):
-        return len(self.multi_desc.desc_list)
+        desc_list = getattr(self.multi_desc, "desc_list")
+        return len(desc_list)
 
     def display_output_location(self):
         desc_list = getattr(self.multi_desc, "desc_list")
+        # print(len(desc_list))
         for desc_index, desc in enumerate(desc_list):
             logger_paths = desc.run_path(self.multi_train_replicate, verbose=False)
-            print(
-                "\n Output Location for subrunner {} : {} ".format(
-                    desc_index, logger_paths["train_run_path"]
+            if get_platform().is_primary_process:
+                print(
+                    "\n Output Location for subrunner {} : {} ".format(
+                        desc_index, logger_paths["train_run_path"]
+                    )
                 )
-            )
 
     def run(self):
         if self.verbose and get_platform().is_primary_process:
@@ -83,9 +90,10 @@ class MultiTrainingRunner(Runner):
 
         sub_runner_list = self.create_sub_runners()
         for sub_runner_index, sub_runner in enumerate(sub_runner_list):
-            print(
-                "=" * 82
-                + f"\n Training Runner {sub_runner_index} (Replicate {sub_runner.train_replicate})\n"
-                + "-" * 82
-            )
+            if self.verbose and get_platform().is_primary_process:
+                print(
+                    "=" * 82
+                    + f"\n Training Runner {sub_runner_index} (Replicate {sub_runner.train_replicate})\n"
+                    + "-" * 82
+                )
             sub_runner.run()
