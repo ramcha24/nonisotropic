@@ -57,15 +57,24 @@ class ThreatRunner(Runner):
         self.desc.save_param(self.threat_replicate)
 
         # check if there is class-wise partitioning for the dataset. If not, create one
-        save_class_partition(dataset_name)
+        save_class_partition(self.desc.dataset_hparams, dataset_type="train")
 
         # run the threat specification
         per_label_array = self.desc.threat_hparams.per_label_array
         subset_selection = self.desc.threat_hparams.subset_selection
-        assert (
-            subset_selection == "greedy"
-        ), "Only greedy subset selection is currently supported"
+        domain_expansion_factor = self.desc.threat_hparams.domain_expansion_factor
+        subset_selection_seed = self.desc.threat_hparams.subset_selection_seed
+        
+        if subset_selection == "greedy":
+            for per_label in per_label_array:
+                save_greedy_partition(
+                    threat_run_path,
+                    self.desc.dataset_hparams,
+                    domain_expansion_factor,
+                    subset_selection_seed,
+                    per_label,
+                    verbose=self.verbose,
+                )
+        else:
+            raise ValueError("Only greedy subset selection is currently supported")
         # in the future we can add more subset selection methods and have a registry to fetch the appropriate method
-
-        for per_label in per_label_array:
-            save_greedy_partition(threat_run_path, self.desc.dataset_hparams, per_label)

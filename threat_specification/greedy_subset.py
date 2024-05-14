@@ -29,10 +29,23 @@ def get_greedy_subset_partition(domain, num_points):
     return subset_domain
 
 
-def save_greedy_partition(run_path, dataset_hparams, per_label):
+def save_greedy_partition(
+    run_path,
+    dataset_hparams,
+    per_label,
+    domain_expansion_factor=10,
+    subset_selection_seed=0,
+    verbose=False,
+):
+    dataset_name = dataset_hparams.dataset_name
+    dataset_loc = os.path.join(get_platform().dataset_root, dataset_name)
+
     dir_path = os.path.join(run_path, "per_label_" + str(per_label))
     get_platform().makedirs(dir_path)
     num_labels = dataset_hparams.num_labels
+
+    # set the random seed
+    torch.manual_seed(subset_selection_seed)
 
     for label in range(num_labels):
         image_partition = torch.load(
@@ -42,12 +55,16 @@ def save_greedy_partition(run_path, dataset_hparams, per_label):
             + ".pt"
         )
         half = int(0.5 * len(image_partition))
-        assert (
-            per_label <= half
-        ), "Not enough data points in label {} to create a greedy subset of size {}".format(
-            label, per_label
-        )
-        max_data_size = min(int(0.5 * per_label * 10), half)
+        max_data_size = min(int(0.5 * per_label * domain_expansion_factor), half)
+
+        if (
+            verbose
+            and get_platform().is_primary_process
+            and per_label * domain_expansion_factor <= half
+        ):
+            print(
+                f"Warning! Not enough data points in label {label} to create a greedy subset of size {per_label}, needed {per_label * domain_expansion_factor} examples but only {half} examples are available"
+            )
 
         # here I could use a different logic to find my points.
         start_1 = 0
@@ -55,7 +72,7 @@ def save_greedy_partition(run_path, dataset_hparams, per_label):
         start_2 = half
         end_2 = half + max_data_size
 
-        if label % 10 == 0:
+        if verbose and get_platform().is_primary_process and label % 10 == 0:
             print("Finding greedy partition for label " + str(label))
 
         greedy_class_partition_first_half = get_greedy_subset_partition(
@@ -65,9 +82,10 @@ def save_greedy_partition(run_path, dataset_hparams, per_label):
             image_partition[start_2:end_2], per_label // 2
         )
 
+        # always storing by halfs. Its easier to compare later, and also lesser code.
         torch.save(
             greedy_class_partition_first_half,
-            dir_path + "greedy_partition_first_half_" + str(label) + ".pt",
+            dir_path + "first_half_" + str(label) + ".pt",
         )
 
         torch.save(
