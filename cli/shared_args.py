@@ -11,6 +11,7 @@ from models.robustbench_registry import rb_registry
 
 from training.desc import TrainingDesc
 from testing.desc import TestingDesc
+from threat_specification.desc import ThreatDesc
 
 
 @dataclass
@@ -76,7 +77,6 @@ class ToggleArgs(hparams.Hparams):
 
 def maybe_get_default_hparams(runner_name: str = None):
     dataset_name = arg_utils.maybe_get_arg("dataset_name")
-
     if dataset_name not in registered_datasets:
         raise ValueError(
             "Cannot provide default runner hparams for invalid dataset : {}".format(
@@ -268,6 +268,9 @@ def maybe_get_default_hparams(runner_name: str = None):
                 )
                 defaults_list.append(train_desc)
             return defaults_list
+    elif runner_name == "compute_threat":
+        threat_hparams = hparams.ThreatHparams()
+        return ThreatDesc(dataset_hparams, threat_hparams)
     else:
         raise ValueError(
             "Cannot supply default hparams for an invalid runner - {}".format(

@@ -1,7 +1,7 @@
 import abc
 import argparse
 import copy
-from dataclasses import dataclass, fields, MISSING
+from dataclasses import dataclass, fields, MISSING, field
 from typing import Tuple
 import hashlib
 
@@ -229,9 +229,9 @@ class DatasetHparams(Hparams):
 
 @dataclass
 class ThreatHparams(Hparams):
-    per_label_array: list[int] = [10, 20, 30, 40, 50]
-    subset_selection: "greedy"
-    subset_selection_seed: int = None
+    per_label: int = 50  # list = field(default_factory=lambda: [10, 20, 30, 40, 50])
+    subset_selection: str = "greedy"
+    subset_selection_seed: int = 41
     domain_expansion_factor: int = 10
 
     _name: str = "Threat Specification Hyperparameters"

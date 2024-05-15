@@ -26,7 +26,7 @@ from training.adv_train_util import get_attack
 from utilities.evaluation_utils import report_adv
 
 from threat_specification.projected_displacement import non_isotropic_projection
-from threat_specification.greedy_subset import load_greedy_subset
+from threat_specification.greedy_subset import load_threat_specification
 
 
 def mixup_data(x, y, alpha=1.0, use_cuda=True):
@@ -125,7 +125,7 @@ def train(
         return
 
     if augment_hparams.N_aug or training_hparams.N_adv_train:
-        greedy_subsets = load_greedy_subset(dataset_hparams)
+        threat_specification = load_threat_specification(dataset_hparams)
 
     if augment_hparams.mixup:
         mixup = v2.MixUp(num_classes=dataset_hparams.num_labels)
@@ -189,7 +189,7 @@ def train(
                     examples,
                     labels,
                     examples[shuffle_indices],
-                    greedy_subsets,
+                    threat_specification,
                     threshold=augment_hparams.N_threshold,
                     # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                 )
@@ -212,7 +212,7 @@ def train(
                             examples,
                             labels,
                             perturbation,
-                            greedy_subsets,
+                            threat_specification,
                             threshold=augment_hparams.N_threshold,
                             # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                         ),
@@ -274,7 +274,7 @@ def train(
                     examples,
                     labels,
                     examples + perturbation,
-                    greedy_subsets,
+                    threat_specification,
                     threshold=training_hparams.N_threshold,
                     # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
                 )

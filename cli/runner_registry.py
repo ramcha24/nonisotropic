@@ -10,7 +10,7 @@ registered_runners = {
     "test": TestingRunner,
     "multi_test": MultiTestingRunner,
     "multi_train": MultiTrainingRunner,
-    "threat_specification": ThreatRunner,
+    "compute_threat": ThreatRunner,
 }
 
 # To Do: runners

@@ -6,6 +6,7 @@ import os
 
 from foundations import hparams
 from foundations import paths
+from foundations import desc
 from platforms.platform import get_platform
 
 
@@ -24,14 +25,15 @@ class ThreatDesc(desc.Desc):
     def add_args(
         parser: argparse.ArgumentParser, defaults: "ThreatDesc" = None, prefix=None
     ) -> None:
-
         hparams.DatasetHparams.add_args(
             parser,
             defaults=defaults.dataset_hparams if defaults else None,
-            # prefix="threat_specification_",
+            prefix=prefix,  # prefix="threat_specification_",
         )
         hparams.ThreatHparams.add_args(
-            parser, defaults=defaults.threat_hparams if defaults else None
+            parser,
+            defaults=defaults.threat_hparams if defaults else None,
+            prefix=prefix,
         )
 
     @staticmethod

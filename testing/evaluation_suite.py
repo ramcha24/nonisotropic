@@ -5,7 +5,7 @@ from random import randrange
 from autoattack import AutoAttack
 
 
-from threat_specification.greedy_subset import load_greedy_subset
+from threat_specification.greedy_subset import load_threat_specification
 from threat_specification.projected_displacement import (
     non_isotropic_projection,
     non_isotropic_threat,
@@ -146,7 +146,7 @@ def create_robust_eval(
             device=get_platform().torch_device,
         )
 
-        greedy_subsets = load_greedy_subset(dataset_hparams)
+        threat_specification = load_threat_specification(dataset_hparams)
 
         current_batch_index = -1
 
@@ -174,7 +174,7 @@ def create_robust_eval(
                         examples,
                         labels,
                         examples_adv,
-                        greedy_subsets,
+                        threat_specification,
                         threshold=dataset_hparams.N_threshold,
                     )
                     output = model(examples_adv)
@@ -187,7 +187,7 @@ def create_robust_eval(
                         examples,
                         labels,
                         examples_adv,
-                        greedy_subsets,
+                        threat_specification,
                     )
 
         # Share the information if distributed.

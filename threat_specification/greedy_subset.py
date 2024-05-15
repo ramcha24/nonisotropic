@@ -5,6 +5,8 @@ import os
 import torch
 from torchmetrics.functional import pairwise_cosine_similarity
 
+from foundations import hparams
+
 
 def get_greedy_subset_partition(domain, num_points):
     domain = domain.to(device=get_platform().torch_device)
@@ -29,20 +31,28 @@ def get_greedy_subset_partition(domain, num_points):
     return subset_domain
 
 
-def save_greedy_partition(
+def compute_threat_specification(
     run_path,
     dataset_hparams,
-    per_label,
-    domain_expansion_factor=10,
-    subset_selection_seed=0,
+    threat_hparams,
     verbose=False,
 ):
-    dataset_name = dataset_hparams.dataset_name
-    dataset_loc = os.path.join(get_platform().dataset_root, dataset_name)
+    subset_selection = threat_hparams.subset_selection
+    if subset_selection != "greedy":
+        raise ValueError(
+            "Subset selection method not supported. Only greedy subset selection is currently supported."
+        )
+    # in the future we can add more subset selection methods and have a registry to fetch the appropriate method
 
+    per_label = threat_hparams.per_label
+    domain_expansion_factor = threat_hparams.domain_expansion_factor
+    subset_selection_seed = threat_hparams.subset_selection_seed
+    num_labels = dataset_hparams.num_labels
+    dataset_name = dataset_hparams.dataset_name
+
+    dataset_loc = os.path.join(get_platform().dataset_root, dataset_name)
     dir_path = os.path.join(run_path, "per_label_" + str(per_label))
     get_platform().makedirs(dir_path)
-    num_labels = dataset_hparams.num_labels
 
     # set the random seed
     torch.manual_seed(subset_selection_seed)
@@ -54,13 +64,16 @@ def save_greedy_partition(
             + str(label)
             + ".pt"
         )
+
+        image_partition = image_partition.to(device=get_platform().torch_device)
+
         half = int(0.5 * len(image_partition))
         max_data_size = min(int(0.5 * per_label * domain_expansion_factor), half)
 
         if (
             verbose
             and get_platform().is_primary_process
-            and per_label * domain_expansion_factor <= half
+            and 0.5 * per_label * domain_expansion_factor > half
         ):
             print(
                 f"Warning! Not enough data points in label {label} to create a greedy subset of size {per_label}, needed {per_label * domain_expansion_factor} examples but only {half} examples are available"
@@ -75,84 +88,128 @@ def save_greedy_partition(
         if verbose and get_platform().is_primary_process and label % 10 == 0:
             print("Finding greedy partition for label " + str(label))
 
-        greedy_class_partition_first_half = get_greedy_subset_partition(
-            image_partition[start_1:end_1], per_label // 2
+        shuffle_indices = torch.randperm(len(image_partition))
+        shuffle_partition = image_partition[shuffle_indices]
+
+        first_half = shuffle_partition[start_1:end_1]
+        second_half = shuffle_partition[start_2:end_2]
+
+        threat_specification_first_half = get_greedy_subset_partition(
+            first_half, per_label // 2
         )
-        greedy_class_partition_second_half = get_greedy_subset_partition(
-            image_partition[start_2:end_2], per_label // 2
+        threat_specification_second_half = get_greedy_subset_partition(
+            second_half, per_label // 2
         )
 
         # always storing by halfs. Its easier to compare later, and also lesser code.
         torch.save(
-            greedy_class_partition_first_half,
-            dir_path + "first_half_" + str(label) + ".pt",
+            threat_specification_first_half,
+            os.path.join(dir_path, "first_half_" + str(label) + ".pt"),
         )
 
         torch.save(
-            greedy_class_partition_second_half,
-            dir_path + "second_half_" + str(label) + ".pt",
+            threat_specification_second_half,
+            os.path.join(dir_path, "second_half_" + str(label) + ".pt"),
         )
-        del greedy_class_partition_first_half, greedy_class_partition_second_half
+        del threat_specification_first_half, threat_specification_second_half
 
 
-def load_greedy_partition(
-    per_label, num_labels, input_shape, label=None, dataset_loc=None
+def load_threat_specification(
+    dataset_hparams,
+    label=None,
+    threat_hparams=None,
+    threat_replicate=1,
 ):
-    dir_path = os.path.join(dataset_loc, "per_label_" + str(per_label))
-
-    if not get_platform().exists(dir_path):
-        raise FileNotFoundError("Greedy subsets not found at " + dir_path)
-
-    file_path_first_half = "/greedy_partition_first_half_"
-    file_path_second_half = "/greedy_partition_second_half_"
-
-    if label is not None:
-        first_half = torch.load(
-            dir_path + file_path_first_half + str(label) + ".pt", map_location="cpu"
-        )
-        second_half = torch.load(
-            dir_path + file_path_second_half + str(label) + ".pt", map_location="cpu"
-        )
-        return first_half, second_half
+    if threat_hparams is None:
+        threat_hparams = hparams.ThreatHparams() # this should eventually be in the desc object for each runner
     else:
-        shape = [num_labels, per_label // 2] + input_shape
-        class_partition_first_half = torch.zeros(shape)
-        class_partition_second_half = torch.zeros(shape)
-
-        for label in range(num_labels):
-            class_partition_first_half[label] = torch.load(
-                dir_path + file_path_first_half + str(label) + ".pt", map_location="cpu"
-            )
-            class_partition_second_half[label] = torch.load(
-                dir_path + file_path_second_half + str(label) + ".pt",
-                map_location="cpu",
+        subset_selection = threat_hparams.subset_selection
+        if subset_selection != "greedy":
+            raise ValueError(
+                "Subset selection method not supported. Only greedy subset selection is currently supported."
             )
 
-        return class_partition_first_half, class_partition_second_half
-
-
-def load_greedy_subset(dataset_hparams, per_label=50):
-    dataset_loc = os.path.join(
-        get_platform().threat_specification_root, dataset_hparams.dataset_name
-    )
     input_shape = [
         dataset_hparams.num_channels,
         dataset_hparams.num_spatial_dims,
         dataset_hparams.num_spatial_dims,
     ]
     num_labels = dataset_hparams.num_labels
-    (first_half, second_half) = load_greedy_partition(
-        per_label,
-        num_labels,
-        input_shape,
-        dataset_loc=dataset_loc,
+
+    dataset_loc = os.path.join(get_platform().runner_root, dataset_hparams.dataset_name)
+    threat_dir = threat_hparams.dir_path(
+        identifier_name="subset_selection"
+    )  # greedy_xx
+
+    threat_hparams_path = os.path.join(
+        dataset_loc, "threat_specification", threat_dir
+    )  # nonisotropic/runner_data/cifar10/threat_specification/greedy_xx
+
+    threat_run_path = os.path.join(
+        threat_hparams_path, "threat_replicate_" + str(threat_replicate)
+    )  # nonisotropic/runner_data/cifar10/threat_specification/greedy_xx/threat_replicate_1
+
+    per_label = threat_hparams.per_label
+    per_label_path = os.path.join(threat_run_path, "per_label_" + str(per_label))
+
+    file_path_first_half = "/first_half_"
+    file_path_second_half = "/second_half_"
+
+    if label is not None:
+        first_half_path = per_label_path + file_path_first_half + str(label) + ".pt"
+        second_half_path = per_label_path + file_path_second_half + str(label) + ".pt"
+
+        if not get_platform().exists(first_half_path) or not get_platform().exists(
+            second_half_path
+        ):
+            raise FileNotFoundError(
+                f"No threat specification files found at {first_half_path}, {second_half_path} for label {label}"
+            )
+
+        first_half = torch.load(
+            per_label_path + file_path_first_half + str(label) + ".pt",
+            map_location="cpu",
+        )
+        second_half = torch.load(
+            per_label_path + file_path_second_half + str(label) + ".pt",
+            map_location="cpu",
+        )
+        return first_half, second_half
+    else:
+        shape = [num_labels, per_label // 2] + input_shape
+        threat_specification_first_half = torch.zeros(shape)
+        threat_specification_second_half = torch.zeros(shape)
+
+        for label in range(num_labels):
+            first_half_path = per_label_path + file_path_first_half + str(label) + ".pt"
+            second_half_path = (
+                per_label_path + file_path_second_half + str(label) + ".pt"
+            )
+
+            if not get_platform().exists(first_half_path) or not get_platform().exists(
+                second_half_path
+            ):
+                raise FileNotFoundError(
+                    f"No threat specification files found at {first_half_path}, {second_half_path} for label {label}"
+                )
+
+            threat_specification_first_half[label] = torch.load(
+                first_half_path + file_path_first_half + str(label) + ".pt",
+                map_location="cpu",
+            )
+            threat_specification_second_half[label] = torch.load(
+                second_half_path + file_path_second_half + str(label) + ".pt",
+                map_location="cpu",
+            )
+
+    threat_specification = torch.cat(
+        (threat_specification_first_half, threat_specification_second_half), dim=1
     )
-    greedy_subsets = torch.cat((first_half, second_half), dim=1)
 
     assert (
-        greedy_subsets.shape[1] == per_label
-    ), "Greedy subset shape mismatch expected {} got {}".format(
-        per_label, greedy_subsets.shape[1]
+        threat_specification.shape[1] == per_label
+    ), "Threat specification shape mismatch expected {} got {}".format(
+        per_label, threat_specification.shape[1]
     )
 
-    return greedy_subsets
+    return threat_specification

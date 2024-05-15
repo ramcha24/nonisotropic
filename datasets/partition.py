@@ -21,11 +21,6 @@ def partition_by_loader(
     dataset_loc: str = None,
     dataset_type: str = "train",
 ):
-    label_count = torch.zeros(num_labels, dtype=int)
-    for (examples, labels) in loader:
-        for _label in range(num_labels):
-            label_count[labels[_label]] += 1
-
     for _label in range(num_labels):
         image_partition_folder_path = os.path.join(
             dataset_loc, dataset_type + "_class_partition"
@@ -34,15 +29,18 @@ def partition_by_loader(
         if os.path.exists(image_partition_folder_path + partition_file_path):
             continue
 
-        per_label = label_count[_label]
-        image_partition = torch.zeros([per_label] + input_shape)
+        print("still finding class partition for label " + str(_label))
+        label_count = 0
+        for (examples, labels) in loader:
+            label_count += len(examples[labels == _label])
 
+        image_partition = torch.zeros([label_count] + input_shape)
         num = 0
         for (examples, labels) in loader:
             num_per_batch = len(examples[labels == _label])
             image_partition[num : num + num_per_batch] = examples[labels == _label]
             num += num_per_batch
-        assert num == per_label
+        assert num == label_count
 
         Path(image_partition_folder_path).mkdir(parents=True, exist_ok=True)
         torch.save(
@@ -62,13 +60,14 @@ def partition_by_folder(dataset_loc: str = None, dataset_type: str = "train"):
     folder_loc = os.path.join(dataset_loc, dataset_type)
     classes = os.listdir(folder_loc)
     for label, label_name in enumerate(classes):
+        if label == 1000:
+            continue
         image_partition_folder_path = os.path.join(
             dataset_loc, dataset_type + "_class_partition"
         )
         partition_file_path = "/" + str(label) + ".pt"
         if os.path.exists(image_partition_folder_path + partition_file_path):
             continue
-
         label_folder_path = os.path.join(folder_loc, label_name)
         label_selection_string = label_folder_path + "/*.JPEG"
         label_images = imread_collection(label_selection_string)
@@ -103,8 +102,8 @@ def partition_by_folder(dataset_loc: str = None, dataset_type: str = "train"):
 
 def save_class_partition(dataset_hparams, dataset_type: str = "train"):
     assert dataset_type in ["train", "val"], f"Invalid dataset type {dataset_type}"
-    dataset_loc = os.path.join(get_platform().dataset_root, dataset_name)
     dataset_name = dataset_hparams.dataset_name
+    dataset_loc = os.path.join(get_platform().dataset_root, dataset_name)
 
     if dataset_name in ["mnist", "cifar10", "cifar100"]:
         train_flag = dataset_type == "train"
