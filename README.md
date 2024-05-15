@@ -1,63 +1,101 @@
-# Things to do
+# Nonisotropic Adversarial Robustness
 
-## CodeBase
+There are 5 experiments that are currently written.
 
--
+## Local vs Distributed Jobs
 
-## Code Refactor
+To run a job on a single gpu, simply call,
 
-- Convert point class to torch vector and have functionality that tensors converts to numpy arrays (and check devices) for plotting
-- Modularize existing code to print all relevant plots and save relevant figures (sublevel sets at p0,p1,p2, p-til)
-- Save the data domain as a data set. with a tag of "exact partition"
-- Add data-generator code that fixes and samples from grid when asked for "synthetic2D"
-- Add data-generator code that does regular data-loading for "MNIST, BlockMNIST, CIFAR-x, Imagenet"
-- Add dataset-hyperparams for each.
+```
+python nonisotropic.py runner_name --dataset_name=cifar10 ... 
+```
 
-## Threat functions
+Common to every job, is the requirement to specify a dataset name as indicated above. Some runners may require more essential information.
 
-- Implement isotropic functions
-- For each point, compute unsafe directions and exact normalization.
-- Implement non-isotropic threat functions.
+The current framework allows one to run experiments over multiple GPUs (and/or multiple nodes). To run a job on multiple GPUS, (say 4 gpus with device ids - 0,1,2,3)
 
-## Synthetic2D
+```
+OMP_NUM_THREADS=12 CUDA_VISIBLE_DEVICES=0,1,2,3 torchrun --nnodes=1 --nproc_per_node=4 --rdzv-endpoint=localhost:5001 nonisotropic.py runner_name --dataset_name=cifar10 ....
+```
 
-- Choose synthetic h, h1, h2 and data domain.
-- Visualize data domain with points p0, p1, p2 and ptil.
-- Design class-wise marginal input distribution that are tightly concentrated. Sample 500 points for each label.
-- Find certified radius for each triple (h, x, d) w.r.t each d in distance metrics (N, approx-n, k-approx-N), each x in the data domain, and h in {h*, h1,h2} by searching over sublevel sets.
-- Visualize as intensity maps. Show variation between h1 and h2.
+Play with the `OMP_NUM_THREADS` environemnt variable to find the optimal choice for your computing server. The code uses PyTorch's `DistributedDataParallel` functionality to automatically handles distributed computing of gradient computation, loss statistcs etc.
 
-## Observed and k-Observed
+## Runners
 
-- Compute unsafe directions with beta normalization w.r.t all sample points. Add resulting distances as observed-PL.
-- Given any data-set find k-subsets for each class using greedy approximation of cosine similarity. Add resulting distances as k-observed-PL.
-- Choose beta for normalization based on the minimal norm of all observed unsafe directions that are within a kappa threshold in cosine similarity.
-- Run through visualization and certification sequence for PL (if exact), observed-PL and k-observed-PL.
+In the above, each runner/job/workflow is identified by the _runner\_name_.  There are currently 6 runners identified in `cli/runner_registry.py`. Below I describe each one briefly. For all run jobs one can display the output location to check where hyperparameter configurations, model weights and any runner output will be stored.
 
-## Projection
+```
+python nonisotropic.py runner_name --dataset_name=cifar10 --display_output_location
+```
 
-- Given a reference point pref, a new point p, Find projection of p to sublevel set Td(pref, epsilon).
-- Use greedy projection algorithm for each non-isotropic distance. Run T rounds and then scale the iterate if it is still not in the sublevel set.
+### Threat Specification Runner
 
-## Augment
+To compute and store a nonisotropic threat specification for a given dataset,
 
-- N-Mixup
-- N-Project
-- Visualize points added according to both on the "synthetic2D" dataset.
+```
+python nonisotropic.py compute_threat --dataset_name=cifar10 --threat_replicate=1
+```
 
-## Attack and Train
+Currently the default (and only) algorithm to compute threat specification is `greedy_subsets`.
 
-- N-PGD : Generic PGD + projection onto C set where C is specific by a N-threat function or just a simple threat function.
-- Adversarial training with N-PGD.
-- Robust Accuracy evaluation.
-- Learn tiny neural network on synthetic2D. show N-PGD attack points.
+### Training Runner
 
-## SOTA Evaluation
+To train a model, specify a dataset, a model name and any augmentation/training options/hyperparameters
 
-- Import model weights from RobustBench and plug into existing code-base.
-- Compute robust accuracy under PGD and N-PGD attacks. Show ranking and robust accuracy curves.
-- Finetune top-5 models with N-Mixup, N-Project and N-adversarial training, show robust accuracy on all combinations and hyperparameter sweeps.
+```
+python nonisotropic.py train --dataset_name=cifar10 --model_name=cifar10_resnet_50 
+```
 
-## Certified Robustness  
+The `train_replicate` indexes multiple training runs with the same hyper-parameter configuration. One can specify augmentation or adversarial training options as follows,  
 
-- Search over approximation of predictor intensity based on LirPA, plot histograms and certified accuracy curves.
+```
+python nonisotropic.py train --dataset_name=cifar10 --model_name=cifar10_resnet_50 --N_aug
+python nonisotropic.py train --dataset_name=cifar10 --model_name=cifar10_resnet_50 --N_aug --adv_train
+```
+
+To see the list of options, consult the dataclasses `AugmentationHparams` and `TrainingHparams` in `foundations/hparams.py`.
+
+### Multi-Training Runner
+
+To enable multiple training runs with a variety of options,
+
+```
+python nonisotropic.py multi_train --dataset_name=cifar10 --model_name=cifar10_resnet_50 --toggle_N_aug --toggle_adv_train --toggle_N_adv_train
+```
+
+Here the command line flag `toggle_N_aug` indicates that two jobs should be run both with and without N_aug. In the above 3 boolean options are presented, thus this job sets up 8 possible combinations and runs them sequentially. To check the possible toggle options, see `ToggleHparams` in `cli/shared_args.py`
+
+### Pretrained Models
+
+The run jobs facilitate downloading, fine-tuning and testing pretrained robust models maintained by [robust benchmark](https://github.com/RobustBench/robustbench). Currently the list of models accounted for are identified in `models/robustbench_registry.py`. The only threat model considered currently is "Linf".
+
+#### Downloading
+
+To download pretrained models,
+
+```
+python nonisotropic.py download_pretrained --dataset_name=cifar10 
+```
+
+#### Finetuning
+
+To finetune pretrained models, one can use `multi_train` runner,
+
+```
+python nonisotropic.py multi_train --dataset_name=cifar10 --model_type=pretrained --toggle_N_aug --toggle_mixup --toggle_N_adv --toggle_adv_train
+
+### Testing Runner 
+To perform evaluate trained models, 
+```
+
+python nonisotropic.py test --dataset_name=cifar10 --model_name=cifar10_resnet_50 --standard_eval
+
+```
+One can also specify the options `--adv_eval` for an isotropic robustness evaluation and `N_adv_eval` for nonisotropic robustness evaluation. 
+
+### Multi-Testing Runner 
+To test multiple models identified by a model_type ("pretrained/finetuned") or a single model_name
+```
+
+python nonisotropic.py multi_test --dataset_name=cifar10 --model_name=cifar10_resnet_50 --toggle_N_aug --toggle_N_adv_train --standard_eval
+```

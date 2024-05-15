@@ -12,6 +12,7 @@ from models.robustbench_registry import rb_registry
 from training.desc import TrainingDesc
 from testing.desc import TestingDesc
 from threat_specification.desc import ThreatDesc
+from models.pretrained.desc import PretrainDesc
 
 
 @dataclass
@@ -271,6 +272,8 @@ def maybe_get_default_hparams(runner_name: str = None):
     elif runner_name == "compute_threat":
         threat_hparams = hparams.ThreatHparams()
         return ThreatDesc(dataset_hparams, threat_hparams)
+    elif runner_name == "download_pretrained":
+        return PretrainDesc(dataset_hparams)
     else:
         raise ValueError(
             "Cannot supply default hparams for an invalid runner - {}".format(

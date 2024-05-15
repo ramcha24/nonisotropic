@@ -86,7 +86,7 @@ def compute_threat_specification(
         end_2 = half + max_data_size
 
         if verbose and get_platform().is_primary_process and label % 10 == 0:
-            print("Finding greedy partition for label " + str(label))
+            print("Finding threat specification for label " + str(label))
 
         shuffle_indices = torch.randperm(len(image_partition))
         shuffle_partition = image_partition[shuffle_indices]
@@ -121,7 +121,9 @@ def load_threat_specification(
     threat_replicate=1,
 ):
     if threat_hparams is None:
-        threat_hparams = hparams.ThreatHparams() # this should eventually be in the desc object for each runner
+        threat_hparams = (
+            hparams.ThreatHparams()
+        )  # this should eventually be in the desc object for each runner
     else:
         subset_selection = threat_hparams.subset_selection
         if subset_selection != "greedy":

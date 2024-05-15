@@ -101,7 +101,7 @@ def add_substr_to_state_dict(state_dict, substr):
 
 def load_model(
     model_name: str,
-    model_dir: Union[str, Path] = "./runner_data/",
+    model_dir: Union[str, Path] = None,
     dataset: Union[str, BenchmarkDataset] = BenchmarkDataset.cifar_10,
     threat_model: Union[str, ThreatModel] = ThreatModel.Linf,
     custom_checkpoint: str = "",
@@ -120,6 +120,9 @@ def load_model(
 
     :return: A ready-to-used trained model.
     """
+    if model_dir is None:
+        raise ValueError("model_dir must be specified.")
+
     dataset_: BenchmarkDataset = BenchmarkDataset(dataset)
     if norm is None:
         # since there is only `corruptions` folder for models in the Model Zoo
@@ -145,13 +148,9 @@ def load_model(
             checkpoint_path=custom_checkpoint,
         ).eval()
 
-    model_dir_ = (
-        Path(model_dir)
-        / dataset_.value
-        / "pretrained"
-        / "robustbenchmark"
-        / threat_model_.value
-    )
+    # cifar10/pretrained/robustbenchmark/Linf/Peng2013robust/
+
+    model_dir_ = Path(model_dir) / model_name
     model_path = model_dir_ / f"{model_name}.pt"
 
     models = all_models[dataset_][threat_model_]
