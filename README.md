@@ -83,18 +83,24 @@ To finetune pretrained models, one can use `multi_train` runner,
 
 ```
 python nonisotropic.py multi_train --dataset_name=cifar10 --model_type=pretrained --toggle_N_aug --toggle_mixup --toggle_N_adv --toggle_adv_train
+```
 
-### Testing Runner 
-To perform evaluate trained models, 
+### Testing Runner
+
+To perform evaluate trained models,
+
 ```
 
 python nonisotropic.py test --dataset_name=cifar10 --model_name=cifar10_resnet_50 --standard_eval
 
 ```
-One can also specify the options `--adv_eval` for an isotropic robustness evaluation and `N_adv_eval` for nonisotropic robustness evaluation. 
 
-### Multi-Testing Runner 
+One can also specify the options `--adv_eval` for an isotropic robustness evaluation and `N_adv_eval` for nonisotropic robustness evaluation.
+
+### Multi-Testing Runner
+
 To test multiple models identified by a model_type ("pretrained/finetuned") or a single model_name
+
 ```
 
 python nonisotropic.py multi_test --dataset_name=cifar10 --model_name=cifar10_resnet_50 --toggle_N_aug --toggle_N_adv_train --standard_eval
