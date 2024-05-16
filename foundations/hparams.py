@@ -129,6 +129,10 @@ class Hparams(abc.ABC):
         return cls(**d)
 
     @classmethod
+    def get_boolean_field_names(cls) -> list[str]:
+        return [f.name for f in fields(cls) if f.type == bool]
+
+    @classmethod
     def modified(cls, default_dict, modify_dict) -> "Hparams":
         for field in fields(cls):
             if field.type == bool and field.name in modify_dict.keys():
@@ -305,7 +309,8 @@ class TrainingHparams(Hparams):
     adv_train: bool = False
     adv_train_attack_type: str = "PGD"
     adv_train_attack_norm: str = "Linf"
-    adv_train_attack_power: float = 8 / 255  # 1.5
+    adv_train_attack_power_Linf: float = 8 / 255  # 1.5
+    adv_train_attack_power_L2: float = 1.5
     adv_train_attack_iter: int = 8
     adv_train_start_epoch: int = 30
     N_threshold: float = 0.3
@@ -332,11 +337,12 @@ class TrainingHparams(Hparams):
     _weight_decay: str = "The L2 penalty to apply to the weights."
     _adv_train: str = "Employ adversarial training"
     _adv_train_attack_type: str = "Type of adversarial attack to employ for training"
-    _adv_train_attack_norm: str = (
-        "Norm of the adversarial attack - either ell_inf, ell_1 or ell_2"
+    _adv_train_attack_norm: str = "Norm of the adversarial attack - either Linf or L2"
+    _adv_train_attack_power_L2: str = (
+        "Power of L2 white-box adversary, step size is always 1/10 of this"
     )
-    _adv_train_attack_power: str = (
-        "Power of white-box adversary, step size is always 1/10 of this"
+    _adv_train_attack_power_Linf: str = (
+        "Power of Linf white-box adversary, step size is always 1/10 of this"
     )
     _adv_train_attack_iter: str = "Number of iterations of an iterative adversarial attack (ignored otherwise) almost always 20"
     _adv_train_start_epoch: str = "Epoch to start adversarial training"
@@ -349,9 +355,11 @@ class TestingHparams(Hparams):
     standard_eval: bool = False
     adv_eval: bool = False
     N_adv_eval: bool = False
+    N_threshold: float = 0.3
     adv_test_attack_type: str = "auto"
     adv_test_attack_norm: str = "Linf"
-    adv_test_attack_power: float = 8 / 255  # 1.5
+    adv_test_attack_power_Linf: float = 8 / 255  # 1.5
+    adv_test_attack_power_L2: float = 1.5
 
     _name: str = "Testing Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is tested."
@@ -360,6 +368,10 @@ class TestingHparams(Hparams):
     )
     _adv_eval: str = "If True, computes robust accuracy for the trained/checkpointed model under an isotropic attack specified by adv_test_attack_type"
     _N_adv_eval: str = "If True, computes robust accuracy for the trained/checkpointed model under a non-isotropic attack specified by adv_test_attack_type"
-    _adv_test_attack_norm: str = (
-        "Norm of the adversarial attack - either ell_inf, ell_1 or ell_2"
+    _N_threshold: str = "Threshold for non-isotropic adversarial training"
+    _adv_test_attack_type: str = (
+        "Type of adversarial attack to employ for testing, defualt : autoattack"
     )
+    _adv_test_attack_norm: str = "Norm of the adversarial attack - either Linf or L2"
+    _adv_test_attack_power_Linf: str = "Power of Linf white-box adversary"
+    _adv_test_attack_power_L2: str = "Power of L2 white-box adversary"

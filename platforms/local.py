@@ -27,6 +27,10 @@ class Platform(base.Platform):
         return os.path.join(pathlib.Path.home(), "nonisotropic/runner_data")
 
     @property
+    def multi_runner_root(self):
+        return os.path.join(pathlib.Path.home(), "nonisotropic/multi_runner_data")
+
+    @property
     def dataset_root(self):
         return os.path.join(pathlib.Path.home(), "nonisotropic/datasets")
 

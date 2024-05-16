@@ -91,6 +91,12 @@ class Platform(Hparams):
 
     @property
     @abc.abstractmethod
+    def multi_runner_root(self):
+        """The root directory where runner data will be stored"""
+        pass
+
+    @property
+    @abc.abstractmethod
     def dataset_root(self):
         """The root directory where datasets will be stored"""
         pass

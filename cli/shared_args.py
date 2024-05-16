@@ -76,6 +76,21 @@ class ToggleArgs(hparams.Hparams):
     _toggle_N_adv_train: str = "Toggle non-isotropic adversarial training"
 
 
+@dataclass
+class MultiTestArgs(hparams.Hparams):
+    multi_standard_eval: bool = False
+    multi_adv_eval: bool = False
+    multi_N_adv_eval: bool = False
+
+    _name: str = "Multi test runner hyperparameters"
+    _description: str = (
+        "Common options for multi-test runner based on boolean sub attributes"
+    )
+    _standard_eval: str = "Evaluate standard model"
+    _robust_eval: str = "Evaluate model on isotropic adversarial attacks"
+    _N_robust_eval: str = "Evaluate model on nonisotropic adversarial attacks"
+
+
 def maybe_get_default_hparams(runner_name: str = None):
     dataset_name = arg_utils.maybe_get_arg("dataset_name")
     if dataset_name not in registered_datasets:

@@ -234,9 +234,7 @@ def train(
                 training_hparams.adv_train
                 and epoch >= training_hparams.adv_train_start_epoch
             ):
-                attack_fn = get_attack(training_hparams)
-
-                attack_power = training_hparams.adv_train_attack_power
+                attack_fn, attack_power = get_attack(training_hparams)
 
                 examples_adv_train = examples + attack_fn(
                     model,
@@ -259,8 +257,8 @@ def train(
                 training_hparams.N_adv_train
                 and epoch >= training_hparams.adv_train_start_epoch
             ):
-                attack_fn = get_attack(training_hparams)
-                attack_power = training_hparams.adv_train_attack_power * 4
+                attack_fn, attack_power = get_attack(training_hparams)
+                attack_power *= 4
                 perturbation = attack_fn(
                     model,
                     examples,

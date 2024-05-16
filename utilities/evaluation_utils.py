@@ -7,27 +7,51 @@ from platforms.platform import get_platform
 from foundations import paths
 
 
-def compute_prob(data, steps=100, start=0.001, end=1, tail=True, log_scale=False):
-    max_val = torch.max(data)
-    min_val = torch.min(data)
+def compute_prob(
+    data,
+    threshold=None,
+    tail=True,
+    raw_count=False,
+    steps=100,
+    start=0.001,
+    end=1,
+    log_scale=False,
+):
     num = torch.numel(data)
 
-    if log_scale:
-        threshold = torch.logspace(math.log10(start), math.log10(end), steps)
-    else:
-        threshold = torch.linspace(start, end, steps)
+    if threshold is None:
+        # threshold values are not provided. Infer from other arguments
+        assert steps is not None
+        assert start is not None
+        assert end is not None
+        max_val = torch.max(data)
+        min_val = torch.min(data)
 
-    threshold = min_val + threshold * (max_val - min_val)
-
-    prob = torch.zeros(steps, device="cpu")
-
-    for i in range(steps):
-        if tail:
-            prob[i] = torch.sum(data > threshold[i]) / num
+        if log_scale:
+            threshold = torch.logspace(math.log10(start), math.log10(end), steps)
         else:
-            prob[i] = torch.sum(data <= threshold[i]) / num
+            threshold = torch.linspace(start, end, steps)
 
-    return prob, threshold
+        threshold = min_val + threshold * (max_val - min_val)
+    else:
+        # threshold value is provided, ignore other ancillary arguments - steps, start, end, log_scale
+        steps = len(threshold)
+
+    data = data.to(get_platform().torch_device)
+    prob = torch.zeros(steps).to(get_platform().torch_device)
+
+    for index in range(steps):
+        if tail:
+            prob[index] = torch.sum(data > threshold[index])
+        else:
+            prob[index] = torch.sum(data <= threshold[index])
+    if not raw_count:
+        prob = prob.div(num)
+
+    if threshold is None:
+        return prob, threshold
+    else:
+        return prob
 
 
 def correct(labels, output):

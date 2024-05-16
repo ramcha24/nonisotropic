@@ -3,7 +3,7 @@ import sys
 import os
 
 from cli import runner_registry, arg_utils
-from cli.shared_args import JobArgs, ToggleArgs
+from cli.shared_args import JobArgs, ToggleArgs, MultiTestArgs
 
 import platforms.registry
 from torch.distributed import init_process_group, destroy_process_group
@@ -77,6 +77,9 @@ def main():
 
     if runner_name.startswith("multi"):
         ToggleArgs.add_args(parser)
+
+    if runner_name == "multi_test":
+        MultiTestArgs.add_args(parser)
 
     runner_registry.get(runner_name).add_args(parser)
 

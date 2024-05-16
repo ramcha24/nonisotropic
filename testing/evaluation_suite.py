@@ -16,7 +16,12 @@ from platforms.platform import get_platform
 from datasets.base import DataLoader
 from foundations import hparams
 
-from utilities.evaluation_utils import correct, get_soft_margin, get_pointwise_margin
+from utilities.evaluation_utils import (
+    correct,
+    compute_prob,
+    get_soft_margin,
+    get_pointwise_margin,
+)
 from utilities.plotting_utils import plot_soft_margin, plot_hist, plot_security_curve
 
 
@@ -97,13 +102,14 @@ def create_standard_eval(
 
 
 def create_robust_eval(
-    dataset_hparams: hparams.DatasetHparams,
     loader: DataLoader,
-    test_output_location,
     data_str,
+    dataset_hparams: hparams.DatasetHparams,
+    test_output_location,
     random_batch_index,
     attack_norm,
-    attack_size,
+    attack_power,
+    N_threshold,
     non_isotropic=False,
     verbose=False,
 ):
@@ -113,7 +119,7 @@ def create_robust_eval(
     def robust_evaluation(model, feedback):
 
         if verbose:
-            iso_str = "isotropic" if not non_isotropic else "non isotropic"
+            iso_str = "nonisotropic" if non_isotropic else "isotropic"
             print(
                 "\n"
                 + "-" * 20
@@ -123,14 +129,9 @@ def create_robust_eval(
                 + "-" * 20
             )
 
-        name = "robust_evaluation_" + data_str
+        name = iso_str + "_robust_evaluation_" + data_str
         eval_dir = os.path.join(test_output_location, name)
-        attack_str = ""
-        if non_isotropic:
-            attack_str += "non_isotropic_"
-        else:
-            attack_str += "isotropic_"
-        attack_str += str(attack_norm)
+        attack_str = iso_str + "_" + str(attack_norm)
 
         info = {}
         example_count = torch.tensor(0.0).to(get_platform().torch_device)
@@ -141,20 +142,40 @@ def create_robust_eval(
         adversary = AutoAttack(
             model,
             norm=attack_norm,
-            eps=attack_size,
+            eps=attack_power,
             log_path=os.path.join(eval_dir, attack_str),
             device=get_platform().torch_device,
         )
 
-        threat_specification = load_threat_specification(dataset_hparams)
+        threat_specification = None
+        num_bins = 50
+        histogram_attack_statistics = torch.zeros(num_bins).to(
+            get_platform().torch_device
+        )
+        attack_statistics = None
+
+        if non_isotropic:
+            threat_specification = load_threat_specification(dataset_hparams)
+            if attack_norm == "L2":
+                attack_statistics = torch.linspace(start=0.05, end=2.5, steps=num_bins)
+                ord_val = 2
+            if attack_norm == "Linf":
+                attack_statistics = torch.linspace(
+                    start=0.5 / 255, end=32 / 255, steps=num_bins
+                )
+                ord_val = float("inf")
+        else:
+            attack_statistics = torch.linspace(start=0.01, end=1.5, steps=num_bins)
+        assert attack_statistics is not None
 
         current_batch_index = -1
 
         # run attack and save images
         with torch.no_grad():
             for examples, labels in loader:
+                # unclear if the following works in distributed setting
                 current_batch_index += 1
-                if current_batch_index != random_batch_index:
+                if random_batch_index and current_batch_index != random_batch_index:
                     continue
 
                 examples = examples.to(get_platform().torch_device)
@@ -164,8 +185,8 @@ def create_robust_eval(
                 )
                 example_count += labels_size
 
-                examples_adv, labels_adv = adversary.run_standard_evaluation(
-                    examples, labels, bs=labels_size, return_labels=True
+                examples_adv = adversary.run_standard_evaluation(
+                    examples, labels, bs=labels_size, return_labels=False
                 )
 
                 if non_isotropic:
@@ -175,20 +196,30 @@ def create_robust_eval(
                         labels,
                         examples_adv,
                         threat_specification,
-                        threshold=dataset_hparams.N_threshold,
+                        threshold=N_threshold,
                     )
-                    output = model(examples_adv)
-                    total_correct += correct(labels, output)
+                    # store attack statistics when evaluated with L2/Linf norm
+                    threats = torch.linalg.norm(
+                        torch.flatten(examples_adv - examples, start_dim=1),
+                        dim=1,
+                        ord=ord_val,
+                    )
+                    histogram_attack_statistics += compute_prob(
+                        threats, threshold=attack_statistics, tail=True, raw_count=True
+                    )
                 else:
-                    # store Nonisotropic threats
-                    total_correct += torch.sum(torch.eq(labels_adv.eq, labels))
-
+                    # store attack statistics when evaluated with nonisotropic threat
                     threats = non_isotropic_threat(
                         examples,
                         labels,
                         examples_adv,
                         threat_specification,
                     )
+                    histogram_attack_statistics += compute_prob(
+                        threats, threshold=attack_statistics, tail=True, raw_count=True
+                    )
+                output = model(examples_adv)
+                total_correct += correct(labels, output)
 
         # Share the information if distributed.
         if get_platform().is_distributed:
@@ -198,12 +229,19 @@ def create_robust_eval(
             torch.distributed.reduce(
                 example_count, 0, op=torch.distributed.ReduceOp.SUM
             )
+            torch.distributed.reduce(
+                histogram_attack_statistics, 0, op=torch.distributed.ReduceOp.SUM
+            )
 
         total_correct = total_correct.cpu().item()
         example_count = example_count.cpu().item()
+        histogram_attack_statistics = 100 * (
+            histogram_attack_statistics.cpu().item() / example_count
+        )
         robust_accuracy = 100 * total_correct / example_count
 
         info["robust_accuracy"] = robust_accuracy
+        info["histogram_attack_statistics"] = histogram_attack_statistics
 
         if verbose and get_platform().is_primary_process:
             nonlocal time_of_last_call
@@ -211,7 +249,7 @@ def create_robust_eval(
                 0 if time_of_last_call is None else time.time() - time_of_last_call
             )
             print(
-                "{} robust evaluation on {} data w.r.t L{}: \t robust_accuracy {:.2f}% \t examples {:d}\t time {:.2f}s".format(
+                "{} robust evaluation on {} data w.r.t {} attacks: \t robust_accuracy {:.2f}% \t examples {:d}\t time {:.2f}s".format(
                     iso_str.capitalize(),
                     data_str,
                     attack_norm,
@@ -263,15 +301,19 @@ def evaluation_suite(
     verbose: bool = True,
 ):
     evaluations = []
-    # random_batch_index = randrange(50)
-    random_batch_index = 10
+
+    if evaluate_batch_only:
+        # random_batch_index = randrange(50)
+        random_batch_index = 10
+    else:
+        random_batch_index = None
 
     if testing_hparams.standard_eval:
         evaluations.append(
             create_standard_eval(
                 test_set_loader,
                 "test",
-                verbose=True,
+                verbose=verbose,
             )
         )
         if eval_on_train:
@@ -279,74 +321,87 @@ def evaluation_suite(
                 create_standard_eval(
                     train_set_loader,
                     "train",
-                    verbose=True,
+                    verbose=verbose,
                 )
             )
 
-    if testing_hparams.adv_eval:
-        attack_norm = testing_hparams.adv_test_attack_norm
-        if attack_norm == "2":
-            attack_size = testing_hparams.adv_attack_size_l2
-        else:
-            attack_size = testing_hparams.adv_attack_size_linf
+    attack_norm = None
+    attack_power = None
+    N_threshold = None
 
+    if testing_hparams.adv_eval or testing_hparams.N_adv_eval:
+        attack_norm = testing_hparams.adv_test_attack_norm
+        N_threshold = testing_hparams.N_threshold
+        if attack_norm == "L2":
+            attack_power = testing_hparams.adv_test_attack_power_L2
+        else:
+            attack_power = testing_hparams.adv_test_attack_power_Linf
+
+    if testing_hparams.adv_eval:
         evaluations.append(
             create_robust_eval(
-                dataset_hparams,
                 test_set_loader,
-                test_output_location,
                 "test",
+                dataset_hparams,
+                test_output_location,
                 random_batch_index,
                 attack_norm,
-                attack_size,
-                verbose=True,
+                attack_power,
+                N_threshold,
+                non_isotropic=False,
+                verbose=verbose,
             )
         )
         if eval_on_train:
             evaluations.append(
                 create_robust_eval(
-                    dataset_hparams,
                     train_set_loader,
-                    test_output_location,
                     "train",
+                    dataset_hparams,
+                    test_output_location,
                     random_batch_index,
                     attack_norm,
-                    attack_size,
-                    verbose=True,
+                    attack_power,
+                    N_threshold,
+                    non_isotropic=False,
+                    verbose=verbose,
                 )
             )
 
     if testing_hparams.N_adv_eval:
-        attack_norm = testing_hparams.adv_test_attack_norm
-        if attack_norm == "2":
-            attack_size = 10 * testing_hparams.adv_attack_size_l2
+        # enlarge the attack power for non-isotropic attacks, the resulting adversarial perturbations will still undergo projection.
+        if attack_norm == "L2":
+            attack_power *= 10
         else:
-            attack_size = 5 * testing_hparams.adv_attack_size_linf
+            attack_power *= 4
 
         evaluations.append(
             create_robust_eval(
-                dataset_hparams,
                 test_set_loader,
-                test_output_location,
                 "test",
+                dataset_hparams,
+                test_output_location,
                 random_batch_index,
                 attack_norm,
-                attack_size,
+                attack_power,
+                N_threshold,
                 non_isotropic=True,
-                verbose=True,
+                verbose=verbose,
             )
         )
         if eval_on_train:
             evaluations.append(
                 create_robust_eval(
-                    dataset_hparams,
                     train_set_loader,
-                    test_output_location,
                     "train",
+                    dataset_hparams,
+                    test_output_location,
                     random_batch_index,
                     attack_norm,
-                    attack_size,
-                    verbose=True,
+                    attack_power,
+                    N_threshold,
+                    non_isotropic=True,
+                    verbose=verbose,
                 )
             )
 

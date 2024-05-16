@@ -88,7 +88,7 @@ class TestingRunner(Runner):
             print(f"Output Location: {full_run_path}/test\n" + "-" * 82 + "\n")
 
         self.desc.save_param(self.train_replicate, self.test_replicate)
-        test.standard_test(
+        feedback = test.standard_test(
             models.registry.get(self.desc.model_hparams),
             train_run_path,
             full_run_path,
@@ -97,3 +97,4 @@ class TestingRunner(Runner):
             verbose=self.verbose,
             evaluate_batch_only=self.evaluate_batch_only,
         )
+        return full_run_path, feedback

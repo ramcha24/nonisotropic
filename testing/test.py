@@ -1,4 +1,5 @@
 import torch
+import os
 
 from platforms.platform import get_platform
 
@@ -48,7 +49,6 @@ def standard_test(
         model = DistributedDataParallel(model, device_ids=[get_platform().local_rank])
 
     # here if the runner is asking for comparing threats, then it would be good to return list(class_wise_loaders)
-
     evaluations = evaluation_suite(
         dataset_hparams,
         testing_hparams,
@@ -59,6 +59,15 @@ def standard_test(
         evaluate_batch_only=evaluate_batch_only,
     )
 
-    feedback = {}
+    feedback = {}  # feedback is a dictionary of all the evaluation output.
     for eval_fn in evaluations:
         eval_fn(model, feedback)
+
+    torch.save(feedback, os.path.join(test_output_location, "feedback.pt"))
+
+    return feedback 
+
+    # need to store feedback.
+    # collect information and do plotting.
+    # need a multi-runner to assess all the feedback and generate plots.
+    # or perhaps return the feedback to the multi-runner and do the post-processing there.

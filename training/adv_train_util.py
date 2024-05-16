@@ -5,11 +5,13 @@ import torch.nn as nn
 def get_attack(training_hparams):
     adv_attack = None
     if training_hparams.adv_train_attack_type == "PGD":
-        if training_hparams.adv_train_attack_norm == "2":
+        if training_hparams.adv_train_attack_norm == "L2":
             adv_attack = projected_gradient_descent_2
+            attack_power = training_hparams.adv_train_attack_power_L2
         if training_hparams.adv_train_attack_norm == "Linf":
             adv_attack = projected_gradient_descent_linf
-    return adv_attack
+            attack_power = training_hparams.adv_train_attack_power_Linf
+    return adv_attack, attack_power
 
 
 def batch_norms(examples):

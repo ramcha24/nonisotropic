@@ -45,29 +45,22 @@ class MultiTrainingDesc(desc.Desc):
         index_list = list(
             range(16)
         )  # currently considering less than 16 pretrained models
-        possible_augment_toggle_args = [
-            "N_aug",
-            "mixup",
-        ]
-        possible_training_toggle_args = [
-            "adv_train",
-            "N_adv_train",
-        ]
+        augment_toggle_args = AugmentationHparams.get_boolean_field_names()
+        training_toggle_args = TrainingHparams.get_boolean_field_names()
+        toggle_choices = [True, False]
 
-        selected_augment_toggle_args = [False, False]
-        for (index, arg_name) in enumerate(possible_augment_toggle_args):
+        selected_augment_toggle_args = [False] * len(augment_toggle_args)
+        for (index, arg_name) in enumerate(augment_toggle_args):
             if getattr(args, "toggle_" + arg_name):
                 selected_augment_toggle_args[index] = True
 
         selected_training_toggle_args = [False, False]
-        for (index, arg_name) in enumerate(possible_training_toggle_args):
+        for (index, arg_name) in enumerate(training_toggle_args):
             if getattr(args, "toggle_" + arg_name):
                 selected_training_toggle_args[index] = True
 
         num_augment_selected = sum(selected_augment_toggle_args)
         num_training_selected = sum(selected_training_toggle_args)
-
-        toggle_choices = [True, False]
         # print(json.dumps(vars(args), indent=4))
 
         desc_list = []
@@ -100,7 +93,7 @@ class MultiTrainingDesc(desc.Desc):
                 ):
                     augment_modify_dict = dict()
                     augment_counter = 0
-                    for (index, arg_name) in enumerate(possible_augment_toggle_args):
+                    for (index, arg_name) in enumerate(augment_toggle_args):
                         if selected_augment_toggle_args[index]:
                             augment_modify_dict[arg_name] = augment_choices[
                                 augment_counter
@@ -116,9 +109,7 @@ class MultiTrainingDesc(desc.Desc):
                     ):
                         training_modify_dict = dict()
                         training_counter = 0
-                        for (index, arg_name) in enumerate(
-                            possible_training_toggle_args
-                        ):
+                        for (index, arg_name) in enumerate(training_toggle_args):
                             if selected_training_toggle_args[index]:
                                 training_modify_dict[arg_name] = training_choices[
                                     training_counter

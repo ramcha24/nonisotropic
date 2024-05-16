@@ -1,5 +1,7 @@
 import argparse
 from dataclasses import dataclass
+import torch
+import os
 
 from cli import shared_args
 from foundations.runner import Runner
@@ -9,6 +11,7 @@ from platforms.platform import get_platform
 from testing.runner import TestingRunner
 
 from multi_testing.desc import MultiTestingDesc
+from utilities.plotting_utils import scatter_plot
 
 
 @dataclass
@@ -91,13 +94,23 @@ class MultiTestingRunner(Runner):
         desc_list = getattr(self.multi_desc, "desc_list")
         for desc_index, desc in enumerate(desc_list):
             logger_paths = desc.run_path(
-                self.multi_train_replicate, self.multi_test_replicate, verbose=False
+                self.multi_train_replicate,
+                self.multi_test_replicate,
+                verbose=self.verbose,
             )
             print(
                 "\n Output Location for subrunner {} : {} ".format(
                     desc_index, logger_paths["test_run_path"]
                 )
             )
+        multi_logger_paths = self.multi_desc.run_path(
+            self.multi_train_replicate, self.multi_test_replicate, verbose=self.verbose
+        )
+        print(
+            "\n Final output location for multi runner : {}".format(
+                multi_logger_paths["feedback_path"]
+            )
+        )
 
     def run(self):
         if self.verbose and get_platform().is_primary_process:
@@ -108,10 +121,60 @@ class MultiTestingRunner(Runner):
             )
 
         sub_runner_list = self.create_sub_runners()
+        desc_list = getattr(self.multi_desc, "desc_list")
+        return_dict = {}
+        standard_accuracy = []
+        isotropic_robust_accuracy = []
+        nonisotropic_robust_accuracy = []
         for sub_runner_index, sub_runner in enumerate(sub_runner_list):
             print(
                 "=" * 82
                 + f"\n Testing Runner {sub_runner_index} (Replicate {sub_runner.test_replicate})\n"
                 + "-" * 82
             )
-            sub_runner.run()
+            logger_paths = desc_list[sub_runner_index].run_path(
+                self.multi_train_replicate,
+                self.multi_test_replicate,
+                verbose=self.verbose,
+            )
+            full_run_path, feedback = sub_runner.run()
+            standard_accuracy.append(
+                feedback["standard_evaluation_test"]["test_accuracy"]
+            )
+            isotropic_robust_accuracy.append(
+                feedback["isotropic_robust_evaluation_test"]["robust_accuracy"]
+            )
+            nonisotropic_robust_accuracy.append(
+                feedback["nonisotropic_robust_evaluation_test"]["robust_accuracy"]
+            )
+            return_dict["full_run_path"] = full_run_path
+            return_dict["feedback"] = feedback
+            return_dict["logger_paths"] = logger_paths
+
+        multi_logger_paths = self.multi_desc.run_path(
+            self.multi_train_replicate, self.multi_test_replicate, verbose=self.verbose
+        )
+        torch.save(
+            return_dict,
+            os.path.join(multi_logger_paths["feedback_path"], "feedback_dicts.pt"),
+        )
+
+        scatter_plot(
+            nonisotropic_robust_accuracy,
+            standard_accuracy,
+            multi_logger_paths["feedback_path"],
+            "standard_vs_nonisotropic",
+            "nonisotropic_robust_accuracy",
+            "standard_accuracy",
+            "Standard Accuracy vs Non isotropic Robust Accuracy",
+        )
+
+        scatter_plot(
+            nonisotropic_robust_accuracy,
+            isotropic_robust_accuracy,
+            multi_logger_paths["feedback_path"],
+            "isotropic_vs_nonisotropic",
+            "nonisotropic_robust_accuracy",
+            "isotropic_accuracy",
+            "Isotropic Robust Accuracy vs Non isotropic Robust Accuracy",
+        )
