@@ -1,8 +1,11 @@
 import os
 
 
-def checkpoint(root):
-    return os.path.join(root, "checkpoint.pth")
+def checkpoint(root, model_name=None):
+    if model_name is not None:
+        return os.path.join(root, model_name + ".pt")
+    else:
+        return os.path.join(root, "checkpoint.pth")
 
 
 def logger(root):

@@ -19,6 +19,7 @@ def standard_test(
     test_output_location: str,
     dataset_hparams: hparams.DatasetHparams,
     testing_hparams: hparams.TestingHparams,
+    model_type: str = None,
     verbose: bool = True,
     evaluate_batch_only: bool = True,
 ):
@@ -28,21 +29,24 @@ def standard_test(
             "Test output location does not exists, check if the hyperparameter save is working"
         )
 
-    checkpoint_location = paths.checkpoint(train_output_location)
-    if not get_platform().exists(checkpoint_location):
-        raise ValueError(
-            "The training location does not have a checkpoint, has the model been trained already?"
-        )
-
     train_loader = datasets.registry.get(dataset_hparams, train=True)
     test_loader = datasets.registry.get(dataset_hparams, train=False)
-
     model.to(get_platform().torch_device)
 
-    checkpoint = get_platform().load_model(
-        checkpoint_location, map_location=torch.device("cpu")
-    )
-    model.load_state_dict(checkpoint["model_state_dict"])
+    if model_type in [None, "finetuned"]:
+        checkpoint_location = paths.checkpoint(train_output_location)
+
+        if not get_platform().exists(checkpoint_location):
+            raise ValueError(
+                f"The training location does not have a checkpoint at {checkpoint_location},\n has the model been trained already?"
+            )
+
+        checkpoint = get_platform().load_model(
+            checkpoint_location, map_location=torch.device("cpu")
+        )
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        assert model_type == "pretrained", f"Invalid model_type {model_type}"
 
     # Handle parallelism if applicable.
     if get_platform().is_distributed:
@@ -65,7 +69,7 @@ def standard_test(
 
     torch.save(feedback, os.path.join(test_output_location, "feedback.pt"))
 
-    return feedback 
+    return feedback
 
     # need to store feedback.
     # collect information and do plotting.

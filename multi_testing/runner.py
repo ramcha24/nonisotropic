@@ -123,30 +123,39 @@ class MultiTestingRunner(Runner):
         sub_runner_list = self.create_sub_runners()
         desc_list = getattr(self.multi_desc, "desc_list")
         return_dict = {}
-        standard_accuracy = []
-        isotropic_robust_accuracy = []
-        nonisotropic_robust_accuracy = []
+
+        standard_eval = desc_list[0].testing_hparams.standard_eval
+        isotropic_robust_eval = desc_list[0].testing_hparams.adv_eval
+        nonisotropic_robust_eval = desc_list[0].testing_hparams.N_adv_eval
+
+        standard_accuracy = [] if standard_eval else None
+        isotropic_robust_accuracy = [] if isotropic_robust_eval else None
+        nonisotropic_robust_accuracy = [] if nonisotropic_robust_eval else None
         for sub_runner_index, sub_runner in enumerate(sub_runner_list):
-            print(
-                "=" * 82
-                + f"\n Testing Runner {sub_runner_index} (Replicate {sub_runner.test_replicate})\n"
-                + "-" * 82
-            )
+            if self.verbose and get_platform().is_primary_process:
+                print(
+                    "=" * 82
+                    + f"\n Testing Runner {sub_runner_index} (Replicate {sub_runner.test_replicate})\n"
+                    + "-" * 82
+                )
             logger_paths = desc_list[sub_runner_index].run_path(
                 self.multi_train_replicate,
                 self.multi_test_replicate,
-                verbose=self.verbose,
+                verbose=False,
             )
             full_run_path, feedback = sub_runner.run()
-            standard_accuracy.append(
-                feedback["standard_evaluation_test"]["test_accuracy"]
-            )
-            isotropic_robust_accuracy.append(
-                feedback["isotropic_robust_evaluation_test"]["robust_accuracy"]
-            )
-            nonisotropic_robust_accuracy.append(
-                feedback["nonisotropic_robust_evaluation_test"]["robust_accuracy"]
-            )
+            if standard_eval:
+                standard_accuracy.append(
+                    feedback["standard_evaluation_test"]["test_accuracy"]
+                )
+            if isotropic_robust_eval:
+                isotropic_robust_accuracy.append(
+                    feedback["isotropic_robust_evaluation_test"]["robust_accuracy"]
+                )
+            if nonisotropic_robust_eval:
+                nonisotropic_robust_accuracy.append(
+                    feedback["nonisotropic_robust_evaluation_test"]["robust_accuracy"]
+                )
             return_dict["full_run_path"] = full_run_path
             return_dict["feedback"] = feedback
             return_dict["logger_paths"] = logger_paths
@@ -159,22 +168,24 @@ class MultiTestingRunner(Runner):
             os.path.join(multi_logger_paths["feedback_path"], "feedback_dicts.pt"),
         )
 
-        scatter_plot(
-            nonisotropic_robust_accuracy,
-            standard_accuracy,
-            multi_logger_paths["feedback_path"],
-            "standard_vs_nonisotropic",
-            "nonisotropic_robust_accuracy",
-            "standard_accuracy",
-            "Standard Accuracy vs Non isotropic Robust Accuracy",
-        )
+        if standard_eval and nonisotropic_robust_eval:
+            scatter_plot(
+                nonisotropic_robust_accuracy,
+                standard_accuracy,
+                multi_logger_paths["feedback_path"],
+                "standard_vs_nonisotropic",
+                "nonisotropic_robust_accuracy",
+                "standard_accuracy",
+                "Standard Accuracy vs Non isotropic Robust Accuracy",
+            )
 
-        scatter_plot(
-            nonisotropic_robust_accuracy,
-            isotropic_robust_accuracy,
-            multi_logger_paths["feedback_path"],
-            "isotropic_vs_nonisotropic",
-            "nonisotropic_robust_accuracy",
-            "isotropic_accuracy",
-            "Isotropic Robust Accuracy vs Non isotropic Robust Accuracy",
-        )
+        if isotropic_robust_eval and nonisotropic_robust_eval:
+            scatter_plot(
+                nonisotropic_robust_accuracy,
+                isotropic_robust_accuracy,
+                multi_logger_paths["feedback_path"],
+                "isotropic_vs_nonisotropic",
+                "nonisotropic_robust_accuracy",
+                "isotropic_accuracy",
+                "Isotropic Robust Accuracy vs Non isotropic Robust Accuracy",
+            )

@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import os
 
 from foundations import hparams
 from models import base
@@ -7,6 +8,7 @@ from models.robustbench_registry import rb_registry, default_rb_registry
 from models.utils import load_model
 from training.desc import TrainingDesc
 from testing.desc import TestingDesc
+from platforms.platform import get_platform
 
 
 class Model(base.Model):
@@ -47,9 +49,18 @@ class Model(base.Model):
 
         # WHAT ABOUT DATA PREPROCESSING
 
+        model_dir = os.path.join(
+            get_platform().runner_root,
+            dataset_name,
+            "pretrained",
+            "robustbenchmark",
+            "Linf",
+        )
+
         pretrained_model = load_model(
             model_name=model_name,
             dataset=dataset_name,
+            model_dir=model_dir,
             threat_model=threat_model,
         )
         return Model(model_name, pretrained_model, threat_model)

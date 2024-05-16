@@ -65,7 +65,8 @@ class TestingRunner(Runner):
         logger_paths = self.desc.run_path(
             self.train_replicate, self.test_replicate, verbose=self.verbose
         )
-        print("\n Output Location : " + logger_paths["test_run_path"])
+        if self.verbose and get_platform().is_primary_process:
+            print("\n Output Location : " + logger_paths["test_run_path"])
 
     def run(self):
         logger_paths = self.desc.run_path(self.train_replicate, self.test_replicate)
@@ -74,14 +75,9 @@ class TestingRunner(Runner):
         full_run_path = logger_paths["test_run_path"]
         if self.verbose and get_platform().is_primary_process:
 
-            train_str = (
-                f"trained Model (replicate {self.train_replicate})"
-                if self.train_replicate > 0
-                else "pretrained Model"
-            )
             print(
                 "=" * 82
-                + f"\n (Replicate {self.test_replicate}) : Testing a Model {train_str} \n"
+                + f"\n (Replicate {self.test_replicate}) : Testing model at {train_run_path}\n"
                 + "-" * 82
             )
             print(self.desc.display)
@@ -89,11 +85,14 @@ class TestingRunner(Runner):
 
         self.desc.save_param(self.train_replicate, self.test_replicate)
         feedback = test.standard_test(
-            models.registry.get(self.desc.model_hparams),
+            models.registry.get(
+                self.desc.dataset_hparams.dataset_name, self.desc.model_hparams
+            ),
             train_run_path,
             full_run_path,
             self.desc.dataset_hparams,
             self.desc.testing_hparams,
+            model_type=self.desc.model_hparams.model_type,
             verbose=self.verbose,
             evaluate_batch_only=self.evaluate_batch_only,
         )

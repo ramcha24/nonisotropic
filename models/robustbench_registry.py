@@ -1,5 +1,5 @@
 cifar10_Linf_RB_model_names = [
-    "Peng2023Robust",
+    # "Peng2023Robust",
     "Wang2023Better_WRN-70-16",
     "Bai2024MixedNUTS",
     "Bai2023Improving_edm",

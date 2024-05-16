@@ -65,9 +65,9 @@ class MultiTestingDesc(Desc):
         num_augment_selected = sum(selected_augment_toggle_args)
         num_training_selected = sum(selected_training_toggle_args)
 
-        multi_test_args = MultiTestArgs.get_boolean_field_names()
+        test_boolean_args = TestingHparams.get_boolean_field_names()
         test_modify_dict = dict()
-        for (index, arg_name) in enumerate(multi_test_args):
+        for (index, arg_name) in enumerate(test_boolean_args):
             if getattr(args, "multi_" + arg_name):
                 test_modify_dict[arg_name] = True
             else:
@@ -199,20 +199,20 @@ class MultiTestingDesc(Desc):
                 model_dir = os.path.join(
                     model_dir,
                     "finetuned",
-                    "multi_train_replicate_" + multi_train_replicate,
+                    "multi_train_replicate_" + str(multi_train_replicate),
                 )
         else:
             model_name = self.desc_list[0].model_hparams.model_name
             assert model_name is not None
             model_dir = "".join(model_name.split("_")[1:])
             model_dir = os.path.join(
-                model_dir, "multi_train_replicate_" + multi_train_replicate
+                model_dir, "multi_train_replicate_" + str(multi_train_replicate)
             )
 
         multi_logger_paths["feedback_path"] = os.path.join(
             multi_logger_paths["dataset_path"],
             model_dir,
-            "multi_test_replicate_" + multi_test_replicate,
+            "multi_test_replicate_" + str(multi_test_replicate),
         )
 
         if verbose and get_platform().is_primary_process:

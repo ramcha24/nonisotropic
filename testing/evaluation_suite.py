@@ -38,7 +38,7 @@ def create_standard_eval(
             print(
                 "-" * 20
                 + "Running Standard Evaluation on {}".format(data_str)
-                + "data"
+                + " data"
                 + "-" * 20
             )
 
@@ -117,9 +117,9 @@ def create_robust_eval(
     time_of_last_call = None
 
     def robust_evaluation(model, feedback):
+        iso_str = "nonisotropic" if non_isotropic else "isotropic"
 
-        if verbose:
-            iso_str = "nonisotropic" if non_isotropic else "isotropic"
+        if verbose and get_platform().is_primary_process:
             print(
                 "\n"
                 + "-" * 20
@@ -143,8 +143,9 @@ def create_robust_eval(
             model,
             norm=attack_norm,
             eps=attack_power,
-            log_path=os.path.join(eval_dir, attack_str),
+            # log_path=os.path.join(eval_dir, attack_str),
             device=get_platform().torch_device,
+            verbose=get_platform().is_primary_process,
         )
 
         threat_specification = None
@@ -186,8 +187,14 @@ def create_robust_eval(
                 example_count += labels_size
 
                 examples_adv = adversary.run_standard_evaluation(
-                    examples, labels, bs=labels_size, return_labels=False
+                    examples,
+                    labels,
+                    bs=labels_size.cpu(),
+                    return_labels=False,
                 )
+                # examples = examples.to(get_platform().torch_device)
+                # labels = labels.to(get_platform().torch_device)
+                examples_adv = examples_adv.to(get_platform().torch_device)
 
                 if non_isotropic:
                     # project examples_adv to the sublevel set
@@ -301,7 +308,6 @@ def evaluation_suite(
     verbose: bool = True,
 ):
     evaluations = []
-
     if evaluate_batch_only:
         # random_batch_index = randrange(50)
         random_batch_index = 10
