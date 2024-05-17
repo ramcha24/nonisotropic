@@ -147,7 +147,9 @@ def create_robust_eval(
             device=get_platform().torch_device,
             verbose=get_platform().is_primary_process,
         )
+        # for simplicity
         adversary.attacks_to_run = ["apgd-ce"]
+        adversary.apgd.n_restarts = 1
 
         threat_specification = None
         num_bins = 50
@@ -156,8 +158,9 @@ def create_robust_eval(
         )
         attack_statistics = None
 
+        threat_specification = load_threat_specification(dataset_hparams)
+
         if non_isotropic:
-            threat_specification = load_threat_specification(dataset_hparams)
             if attack_norm == "L2":
                 attack_statistics = torch.linspace(start=0.05, end=2.5, steps=num_bins)
                 ord_val = 2
@@ -247,7 +250,7 @@ def create_robust_eval(
         total_correct = total_correct.cpu().item()
         example_count = example_count.cpu().item()
         histogram_attack_statistics = 100 * (
-            histogram_attack_statistics.cpu().item() / example_count
+            histogram_attack_statistics.cpu() / example_count
         )
         robust_accuracy = 100 * total_correct / example_count
 

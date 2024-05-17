@@ -169,11 +169,11 @@ def load_threat_specification(
             )
 
         first_half = torch.load(
-            per_label_path + file_path_first_half + str(label) + ".pt",
+            first_half_path,
             map_location="cpu",
         )
         second_half = torch.load(
-            per_label_path + file_path_second_half + str(label) + ".pt",
+            second_half_path,
             map_location="cpu",
         )
         return first_half, second_half
@@ -196,11 +196,11 @@ def load_threat_specification(
                 )
 
             threat_specification_first_half[label] = torch.load(
-                first_half_path + file_path_first_half + str(label) + ".pt",
+                first_half_path,
                 map_location="cpu",
             )
             threat_specification_second_half[label] = torch.load(
-                second_half_path + file_path_second_half + str(label) + ".pt",
+                second_half_path,
                 map_location="cpu",
             )
 
