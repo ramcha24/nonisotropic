@@ -1,4 +1,5 @@
 import numpy as np
+import torchvision
 
 from datasets import base, mnist, cifar10, cifar100, imagenet
 from foundations.hparams import DatasetHparams

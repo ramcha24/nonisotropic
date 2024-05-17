@@ -1,3 +1,5 @@
+import torchvision
+
 from foundations import paths
 from foundations.hparams import ModelHparams
 from foundations.step import Step

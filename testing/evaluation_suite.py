@@ -123,7 +123,7 @@ def create_robust_eval(
             print(
                 "\n"
                 + "-" * 20
-                + "Running {} robust evaluation on {} data w.r.t L{}".format(
+                + "Running {} robust evaluation on {} data w.r.t {}".format(
                     iso_str, data_str, attack_norm
                 )
                 + "-" * 20
@@ -147,6 +147,7 @@ def create_robust_eval(
             device=get_platform().torch_device,
             verbose=get_platform().is_primary_process,
         )
+        adversary.attacks_to_run = ["apgd-ce"]
 
         threat_specification = None
         num_bins = 50
@@ -184,12 +185,15 @@ def create_robust_eval(
                 labels_size = torch.tensor(
                     len(labels), device=get_platform().torch_device
                 )
+                # if get_platform().is_primary_process:
+                #     print(f"Labels size is {labels_size}")
+                #
                 example_count += labels_size
 
                 examples_adv = adversary.run_standard_evaluation(
                     examples,
                     labels,
-                    bs=labels_size.cpu(),
+                    bs=50,
                     return_labels=False,
                 )
                 # examples = examples.to(get_platform().torch_device)
