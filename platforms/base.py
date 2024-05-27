@@ -11,6 +11,7 @@ import platforms.platform
 @dataclass
 class Platform(Hparams):
     num_workers: int = 0
+    use_cpu: bool = False
 
     _name: str = "Platform Hyper parameters"
     _description: str = (
@@ -19,12 +20,13 @@ class Platform(Hparams):
     _num_workers: str = (
         "The number of worker threads to use for data loading (currently just 1)"
     )
+    _use_cpu: str = "Use CPU instead of GPU"
 
     @property
     def device_str(self):
 
         # GPU device
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and not self.use_cpu:
             return "cuda"
 
         # CPU device

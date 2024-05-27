@@ -340,14 +340,14 @@ def train(
             # if augment_hparams.mixup:
             #    loss += model.loss_criterion(model(mixup_examples), mixup_labels)
 
-            if overall_loss.isnan().any() and get_platform().is_primary_process:
-                print(
-                    "Warning!!! Loss is NaN at epoch {}, iteration {}".format(
-                        epoch, iteration
-                    )
-                )
-                # Consider torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
-                return
+            # if overall_loss.isnan().any() and get_platform().is_primary_process:
+            #     print(
+            #         "Warning!!! Loss is NaN at epoch {}, iteration {}".format(
+            #             epoch, iteration
+            #         )
+            #     )
+            #     # Consider torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+            #     return
 
             overall_loss.backward()
 

@@ -34,6 +34,9 @@ def standard_test(
         if get_platform().is_primary_process and verbose:
             print(f"Feedback already exists at {feedback_location}, \n skipping tests.")
         return torch.load(feedback_location)
+    else:
+        if get_platform().is_primary_process and verbose:
+            print(f"Computing evaluation feedback.")
 
     train_loader = datasets.registry.get(dataset_hparams, train=True)
     test_loader = datasets.registry.get(dataset_hparams, train=False)
