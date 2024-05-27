@@ -2,15 +2,26 @@ Datasets - {cifar10, cifar100, imagenet}
 architectures - {resnet50, vit-base}
 
 # Training from scratch
-Augmentation - [no_aug, N_aug, mixup]
 
+## Augmentation
+Types - [no_aug, N_aug, mixup]
+
+N_aug = [N_project, N_mixup]
+- N_project 
+
+- N_mixup 
+mixup with
 x1, y1
 x2, y2
-x3, y3 
+x3, y3
 
-x2, y2 
+x2, y2
 x1, y1
-x3, y3 
+x3, y3
+
+
+
+
 
 Training - [standard_train, adv_train, N_adv_train]
 

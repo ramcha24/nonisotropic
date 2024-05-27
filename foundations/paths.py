@@ -8,6 +8,10 @@ def checkpoint(root, model_name=None):
         return os.path.join(root, "checkpoint.pth")
 
 
+def feedback(root):
+    return os.path.join(root, "feedback.pt")
+
+
 def logger(root):
     return os.path.join(root, "logger")
 

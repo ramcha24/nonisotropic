@@ -145,7 +145,7 @@ def create_robust_eval(
             eps=attack_power,
             # log_path=os.path.join(eval_dir, attack_str),
             device=get_platform().torch_device,
-            verbose=get_platform().is_primary_process,
+            verbose=False,  # get_platform().is_primary_process,
         )
         # for simplicity
         adversary.attacks_to_run = ["apgd-ce"]
@@ -188,15 +188,12 @@ def create_robust_eval(
                 labels_size = torch.tensor(
                     len(labels), device=get_platform().torch_device
                 )
-                # if get_platform().is_primary_process:
-                #     print(f"Labels size is {labels_size}")
-                #
                 example_count += labels_size
 
                 examples_adv = adversary.run_standard_evaluation(
                     examples,
                     labels,
-                    bs=50,
+                    bs=32,
                     return_labels=False,
                 )
                 # examples = examples.to(get_platform().torch_device)
@@ -263,10 +260,11 @@ def create_robust_eval(
                 0 if time_of_last_call is None else time.time() - time_of_last_call
             )
             print(
-                "{} robust evaluation on {} data w.r.t {} attacks: \t robust_accuracy {:.2f}% \t examples {:d}\t time {:.2f}s".format(
+                "{} robust evaluation on {} data w.r.t {} attacks of size {}: \t robust_accuracy {:.2f}% \t examples {:d}\t time {:.2f}s".format(
                     iso_str.capitalize(),
                     data_str,
                     attack_norm,
+                    attack_power,
                     robust_accuracy,
                     int(example_count),
                     elapsed,
@@ -316,8 +314,7 @@ def evaluation_suite(
 ):
     evaluations = []
     if evaluate_batch_only:
-        # random_batch_index = randrange(50)
-        random_batch_index = 10
+        random_batch_index = randrange(50)
     else:
         random_batch_index = None
 

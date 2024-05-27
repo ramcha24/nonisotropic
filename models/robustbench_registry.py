@@ -1,7 +1,7 @@
 cifar10_Linf_RB_model_names = [
     "Peng2023Robust",
     "Wang2023Better_WRN-70-16",
-    "Bai2024MixedNUTS",
+    # "Bai2024MixedNUTS",
     "Bai2023Improving_edm",
     "Cui2023Decoupled_WRN-28-10",
     "Wang2023Better_WRN-28-10",
@@ -22,7 +22,7 @@ default_cifar10_dict = {"Linf": cifar10_Linf_RB_model_names[7]}
 
 cifar100_Linf_RB_model_names = [
     "Wang2023Better_WRN-70-16",
-    "Bai2024MixedNUTS",
+    # "Bai2024MixedNUTS",
     "Cui2023Decoupled_WRN-28-10",
     "Wang2023Better_WRN-28-10",
     "Bai2023Improving_edm",
@@ -43,7 +43,7 @@ default_cifar100_dict = {"Linf": cifar100_Linf_RB_model_names[7]}
 
 imagenet_Linf_RB_model_names = [
     "Liu2023Comprehensive_Swin-L",
-    "Bai2024MixedNUTS",
+    # "Bai2024MixedNUTS",
     "Liu2023Comprehensive_ConvNeXt-L",
     "Singh2023Revisiting_ConvNeXt-L-ConvStem",
     "Liu2023Comprehensive_Swin-B",

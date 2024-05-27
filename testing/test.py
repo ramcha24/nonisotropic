@@ -29,6 +29,12 @@ def standard_test(
             "Test output location does not exists, check if the hyperparameter save is working"
         )
 
+    feedback_location = paths.feedback(test_output_location)
+    if get_platform().exists(feedback_location):
+        if get_platform().is_primary_process and verbose:
+            print(f"Feedback already exists at {feedback_location}, \n skipping tests.")
+        return torch.load(feedback_location)
+
     train_loader = datasets.registry.get(dataset_hparams, train=True)
     test_loader = datasets.registry.get(dataset_hparams, train=False)
     model.to(get_platform().torch_device)
@@ -67,7 +73,7 @@ def standard_test(
     for eval_fn in evaluations:
         eval_fn(model, feedback)
 
-    torch.save(feedback, os.path.join(test_output_location, "feedback.pt"))
+    torch.save(feedback, feedback_location)
 
     return feedback
 

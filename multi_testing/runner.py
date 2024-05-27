@@ -113,10 +113,12 @@ class MultiTestingRunner(Runner):
         )
 
     def run(self):
+        num_sub_runners = self.get_num_sub_runners()
+
         if self.verbose and get_platform().is_primary_process:
             print(
                 "=" * 82
-                + f"\n Multi-Testing with {self.get_num_sub_runners()} sub-runners (Replicate {self.multi_test_replicate})\n"
+                + f"\n Multi-Testing with {num_sub_runners} sub-runners (Replicate {self.multi_test_replicate})\n"
                 + "-" * 82
             )
 
@@ -135,7 +137,7 @@ class MultiTestingRunner(Runner):
             if self.verbose and get_platform().is_primary_process:
                 print(
                     "=" * 82
-                    + f"\n Testing Runner {sub_runner_index} (Replicate {sub_runner.test_replicate})\n"
+                    + f"\n Testing Runner {sub_runner_index}/{num_sub_runners} (Replicate {sub_runner.test_replicate})\n"
                     + "-" * 82
                 )
             logger_paths = desc_list[sub_runner_index].run_path(
