@@ -4,6 +4,7 @@ from utilities.miscellaneous import sanity_check
 import torch
 
 
+@torch.no_grad()
 def partial_threat_fn(
     reference_inputs,
     reference_labels,
@@ -56,6 +57,8 @@ def partial_threat_fn(
         return partial_threats.squeeze(1)
 
 
+@torch.no_grad()
+@torch.no_grad()
 def non_isotropic_threat(
     reference_inputs,
     reference_labels,
@@ -86,7 +89,9 @@ def non_isotropic_threat(
 
     num_labels = greedy_subsets.shape[0]
 
-    threats = torch.zeros(len(reference_inputs)).to(device=get_platform().torch_device)
+    threats = torch.zeros(len(reference_inputs), requires_grad=False).to(
+        device=get_platform().torch_device
+    )
 
     for anchor_label in range(0, num_labels):
         anchor_points = greedy_subsets[anchor_label].to(
@@ -107,6 +112,7 @@ def non_isotropic_threat(
     return threats
 
 
+@torch.no_grad()
 def non_isotropic_threat_all_pairs(
     reference_inputs,
     reference_labels,
@@ -145,9 +151,9 @@ def non_isotropic_threat_all_pairs(
     num_labels = greedy_subsets.shape[0]
     per_label = greedy_subsets.shape[1]
 
-    threats = torch.zeros(len(reference_inputs), len(perturbed_inputs)).to(
-        device=get_platform().torch_device
-    )
+    threats = torch.zeros(
+        len(reference_inputs), len(perturbed_inputs), requires_grad=False
+    ).to(device=get_platform().torch_device)
 
     label_step = 4
 
@@ -184,6 +190,7 @@ def non_isotropic_threat_all_pairs(
     return threats
 
 
+@torch.no_grad()
 def non_isotropic_projection(
     reference_inputs,
     reference_labels,
@@ -300,7 +307,9 @@ def non_isotropic_projection(
     reference_inputs = torch.unflatten(reference_inputs, 1, input_shape)
     current_perturbations = torch.unflatten(current_perturbations, 1, input_shape)
 
-    if max_threat_ap <= threshold:
-        return reference_inputs + current_perturbations
-    else:
-        return reference_inputs + current_perturbations * (threshold / max_threat_ap)
+    if max_threat_ap > threshold:
+        current_perturbations = current_perturbations * (threshold / max_threat_ap)
+
+    perturbed_inputs = reference_inputs + current_perturbations
+
+    return perturbed_inputs.detach()
