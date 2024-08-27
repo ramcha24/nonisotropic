@@ -20,7 +20,7 @@ class Platform(base.Platform):
 
     @property
     def is_primary_process(self):
-        return self.local_rank == 0
+        return True
 
     @property
     def runner_root(self):

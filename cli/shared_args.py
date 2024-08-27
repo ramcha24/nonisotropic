@@ -56,7 +56,7 @@ class JobArgs(hparams.Hparams):
     _test_replicate: str = (
         "The replicate number for testing. -1 means no replicate number is specified."
     )
-
+    # Why should evaluate_only_at_end , evaluate_only_batch_test and evalaute_every_few_epoch be listed here?
 
 @dataclass
 class ToggleArgs(hparams.Hparams):
@@ -67,14 +67,15 @@ class ToggleArgs(hparams.Hparams):
     toggle_N_adv_train: bool = False
 
     _name: str = "Multi runner toggle hyperparameters"
-    _description: str = (
-        "Toggle options for multi-runners based on boolean sub attributes"
+    _description: str = "Toggle options for multi-runners based on boolean sub attributes. These options help decide the set of sub-runners"
+    _model_type: str = "Type of model to multi-train/multi-test : None or pretrained or finetuned as applicable"
+    _toggle_N_aug: str = "Add non-isotropic augmentations for all sub-runners"
+    _toggle_mixup: str = "Add mixup augmentation for all sub-runners"
+    _toggle_adv_train: str = "Add adversarial training for all sub-runners"
+    _toggle_N_adv_train: str = (
+        "Add non-isotropic adversarial training for all sub-runners"
     )
-    _toggle_N_aug: str = "Toggle both non-isotropic augmentations"
-    _toggle_mixup: str = "Toggle mixup augmentation"
-    _toggle_adv_train: str = "Toggle adversarial training"
-    _toggle_N_adv_train: str = "Toggle non-isotropic adversarial training"
-
+    # resolve consistent naming toggle vs multi
 
 @dataclass
 class MultiTestArgs(hparams.Hparams):
@@ -83,12 +84,16 @@ class MultiTestArgs(hparams.Hparams):
     multi_N_adv_eval: bool = False
 
     _name: str = "Multi test runner hyperparameters"
-    _description: str = (
-        "Common options for multi-test runner based on boolean sub attributes"
+    _description: str = "Common options for multi-test runner based on boolean sub attributes. These options are applied for evaluation in each test sub-runner"
+    _multi_standard_eval: str = (
+        "Evaluate models on clean test data for each test sub-runner"
     )
-    _standard_eval: str = "Evaluate standard model"
-    _robust_eval: str = "Evaluate model on isotropic adversarial attacks"
-    _N_robust_eval: str = "Evaluate model on nonisotropic adversarial attacks"
+    _multi_robust_eval: str = (
+        "Evaluate models on isotropic adversarial attacks for each test sub-runner"
+    )
+    _multi_N_robust_eval: str = (
+        "Evaluate models on nonisotropic adversarial attacks for each test sub-runner"
+    )
 
 
 def maybe_get_default_hparams(runner_name: str = None):
@@ -147,7 +152,7 @@ def maybe_get_default_hparams(runner_name: str = None):
 
     elif runner_name == "multi_test":
         # for multi_test runner,
-        # python nonisotropic.py multi_test --dataset_name=cifar10 --threat_model-Linf --model_type=pretrained
+        # python nonisotropic.py multi_test --dataset_name=cifar10 --threat_model=Linf --model_type=pretrained
 
         assert model_type in [
             None,

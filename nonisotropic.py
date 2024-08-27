@@ -16,15 +16,15 @@ from dataclasses import dataclass, fields, MISSING
 def main():
     # Welcome message
     welcome = (
-        "-" * 100
+        "-" * 120
         + "\n Non-isotropic Robustness : Measuring adversarial robustness against non-isotropic threat specifications\n"
-        + "-" * 100
+        + "-" * 120
     )
 
     # choose an initial command
     helptext = welcome + "\n Choose a command to run:"
     for name, runner in runner_registry.registered_runners.items():
-        helptext += f"\n * {sys.argv[0]} {name} [...] => {runner.description()}"
+        helptext += f"\n * nonisotropic.py {name} [...] => {runner.description()}"
     helptext += "\n" + "-" * 82
 
     runner_name = arg_utils.maybe_get_arg("subcommand", positional=True)
@@ -35,7 +35,7 @@ def main():
     # Add the arguments for that command.
     usage = "\n" + welcome + "\n"
     usage += f"nonisotropic.py {runner_name} [...] => {runner_registry.get(runner_name).description()}"
-    usage += "\n" + "-" * 82 + "\n"
+    usage += "\n" + "-" * 120 + "\n"
 
     parser = argparse.ArgumentParser(usage=usage, conflict_handler="resolve")
     parser.add_argument("subcommand")
@@ -58,7 +58,7 @@ def main():
 
     if platform_name == "distributed" and not rank_flag:
         print(
-            "\nLocal rank environment variable has not been set, For a distributed job, try 'torchrun --nproc_per_node=2 nonisotropic.py ...'\n"
+            "\nLocal rank environment variable has not been set, For a distributed job, try \n'torchrun --nnodes=? --nproc_per_node=? --rdzv-endpoint=localhost:???? nonisotropic.py ...'\n"
         )
         sys.exit(1)
     if platform_name == "local" and rank_flag:
@@ -66,6 +66,7 @@ def main():
             "\nLocal rank environment variable indicates a distributed job but the chosen platform is local. Try setting --platform distributed or ignore --platform argument when running with torchrun launcher\n"
         )
         sys.exit(1)
+        
     if platform_name and platform_name in platforms.registry.registered_platforms:
         platforms.registry.get(platform_name).add_args(parser)
     else:

@@ -31,7 +31,7 @@ class Platform(Hparams):
 
         # CPU device
         else:
-            print("Not connecting to the GPU!")
+            # print("Not connecting to the GPU!")
             return "cpu"
 
     @property
