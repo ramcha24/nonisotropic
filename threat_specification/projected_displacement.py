@@ -28,11 +28,14 @@ def partial_threat_fn(
         perturbations = -(reference_inputs.unsqueeze(1) - perturbed_inputs.unsqueeze(0))
     else:
         assert len(anchor_labels) == 1  # only one label for all anchor points.
+        # perturbations shape is B x 1 x flat_input_shape
         perturbations = -(reference_inputs - perturbed_inputs).unsqueeze(1)
 
     # assuming batch of flat inputs, perturbations and threats
+    # unsafe direcrtions shape is B x num_anchors x flat_input_shape
     unsafe_directions = -(reference_inputs.unsqueeze(1) - anchor_points)
 
+    # unsafe norms shape is B x num_anchors
     unsafe_norms = (
         beta * (torch.linalg.norm(unsafe_directions, dim=2, ord=2) ** 2) + 1e-2
     )
@@ -57,7 +60,6 @@ def partial_threat_fn(
         return partial_threats.squeeze(1)
 
 
-@torch.no_grad()
 @torch.no_grad()
 def non_isotropic_threat(
     reference_inputs,
@@ -200,7 +202,27 @@ def non_isotropic_projection(
     num_iterations=10,
     verbose=False,
 ):
+    # print("Inside non-isotropic projection 1")
+    # print("requires_grad check")
+    # print(f"reference_inputs : {reference_inputs.requires_grad}")
+    # print(f"reference_labels : {reference_labels.requires_grad}")
+    # print(f"perturbed_inputs : {perturbed_inputs.requires_grad}")
+    # print(f"greedy_subsets : {greedy_subsets.requires_grad}")
+
+    reference_inputs = reference_inputs.detach().clone()
+    reference_labels = reference_labels.detach().clone()
+    perturbed_inputs = perturbed_inputs.detach().clone()
+    greedy_subsets = greedy_subsets.detach().clone()
+
+    # print("Inside non-isotropic projection 2")
+    # print("requires_grad check")
+    # print(f"reference_inputs : {reference_inputs.requires_grad}")
+    # print(f"reference_labels : {reference_labels.requires_grad}")
+    # print(f"perturbed_inputs : {perturbed_inputs.requires_grad}")
+    # print(f"greedy_subsets : {greedy_subsets.requires_grad}")
+
     sanity_check(locals())
+
     # ref_input : B x input_shape
     # Perturbations : B x input_shape
     # one perturbation for each reference input.
@@ -312,4 +334,4 @@ def non_isotropic_projection(
 
     perturbed_inputs = reference_inputs + current_perturbations
 
-    return perturbed_inputs.detach()
+    return perturbed_inputs.detach().clone()

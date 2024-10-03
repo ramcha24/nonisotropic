@@ -110,15 +110,22 @@ class Model(base.Model):
     def default_training_hparams(
         model_name=None, dataset_name=None, threat_model=None, model_type=None
     ):
+        if dataset_name == "imagenet":
+            adv_iters = 3
+        else:
+            adv_iters = 8
+
         if model_type in ["pretrained", "finetuned"]:
             return hparams.TrainingHparams(
                 optimizer_name="sgd",
                 momentum=0.9,
-                milestone_steps="10ep",
+                milestone_steps="5ep",
                 lr=0.01,
                 gamma=0.1,
                 weight_decay=1e-4,
-                training_steps="20ep",
+                training_steps="10ep",
+                adv_train_start_epoch=0,
+                adv_train_attack_iter=adv_iters,
             )
         else:
             raise ValueError(

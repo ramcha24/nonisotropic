@@ -1,7 +1,7 @@
 import numpy as np
 import torchvision
 
-from datasets import base, mnist, cifar10, cifar100, imagenet
+from datasets import base, mnist, cifar10, cifar100, imagenet, tinyimagenet
 from foundations.hparams import DatasetHparams
 from platforms.platform import get_platform
 
@@ -10,6 +10,7 @@ registered_datasets = {
     "cifar10": cifar10,
     "cifar100": cifar100,
     "imagenet": imagenet,
+    "tinyimagenet": tinyimagenet,
 }
 
 

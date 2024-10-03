@@ -1,5 +1,5 @@
 cifar10_Linf_RB_model_names = [
-    "Peng2023Robust",
+    # "Peng2023Robust",
     "Wang2023Better_WRN-70-16",
     # "Bai2024MixedNUTS",
     # "Bai2023Improving_edm",
@@ -8,41 +8,41 @@ cifar10_Linf_RB_model_names = [
     "Rebuffi2021Fixing_70_16_cutmix_extra",
     "Gowal2021Improving_70_16_ddpm_100m",
     "Gowal2020Uncovering_70_16_extra",
-    "Huang2022Revisiting_WRN-A4",
-    "Rebuffi2021Fixing_106_16_cutmix_ddpm",
+    # "Huang2022Revisiting_WRN-A4",
+    # "Rebuffi2021Fixing_106_16_cutmix_ddpm",
     "Rebuffi2021Fixing_70_16_cutmix_ddpm",
-    "Kang2021Stable",
+    # "Kang2021Stable",
     "Xu2023Exploring_WRN-28-10",
     "Gowal2021Improving_28_10_ddpm_100m",
 ]
-cifar10_dict = {"Linf": cifar10_Linf_RB_model_names}
+cifar10_dict = {"Linf": cifar10_Linf_RB_model_names[:5]}
 
-default_cifar10_dict = {"Linf": cifar10_Linf_RB_model_names[7]}
+default_cifar10_dict = {"Linf": cifar10_Linf_RB_model_names[5]}
 
 
 cifar100_Linf_RB_model_names = [
-    "Wang2023Better_WRN-70-16",
+    # "Wang2023Better_WRN-70-16",
     # "Bai2024MixedNUTS",
     "Cui2023Decoupled_WRN-28-10",
     "Wang2023Better_WRN-28-10",
     # "Bai2023Improving_edm",
-    "Gowal2020Uncovering_extra",
-    "Bai2023Improving_trades",
-    "Debenedetti2022Light_XCiT-L12",
-    "Rebuffi2021Fixing_70_16_cutmix_ddpm",
-    "Debenedetti2022Light_XCiT-M12",
-    "Pang2022Robustness_WRN70_16",
+    # "Gowal2020Uncovering_extra",
+    # "Bai2023Improving_trades",
+    # "Debenedetti2022Light_XCiT-L12",
+    # "Rebuffi2021Fixing_70_16_cutmix_ddpm",
+    # "Debenedetti2022Light_XCiT-M12",
+    # "Pang2022Robustness_WRN70_16",
     "Cui2023Decoupled_WRN-34-10_autoaug",
     "Debenedetti2022Light_XCiT-S12",
     "Rebuffi2021Fixing_28_10_cutmix_ddpm",
     "Jia2022LAS-AT_34_20",
 ]
-cifar100_dict = {"Linf": cifar100_Linf_RB_model_names}
-default_cifar100_dict = {"Linf": cifar100_Linf_RB_model_names[7]}
+cifar100_dict = {"Linf": cifar100_Linf_RB_model_names[:5]}
+default_cifar100_dict = {"Linf": cifar100_Linf_RB_model_names[5]}
 
 
 imagenet_Linf_RB_model_names = [
-    "Liu2023Comprehensive_Swin-L",
+    # "Liu2023Comprehensive_Swin-L",
     # "Bai2024MixedNUTS",
     "Liu2023Comprehensive_ConvNeXt-L",
     "Singh2023Revisiting_ConvNeXt-L-ConvStem",
@@ -58,8 +58,8 @@ imagenet_Linf_RB_model_names = [
     "Debenedetti2022Light_XCiT-M12",
     "Debenedetti2022Light_XCiT-S12",
 ]
-imagenet_dict = {"Linf": imagenet_Linf_RB_model_names}
-default_imagenet_dict = {"Linf": imagenet_Linf_RB_model_names[7]}
+imagenet_dict = {"Linf": imagenet_Linf_RB_model_names[:5]}
+default_imagenet_dict = {"Linf": imagenet_Linf_RB_model_names[5]}
 
 rb_registry = {
     "cifar10": cifar10_dict,

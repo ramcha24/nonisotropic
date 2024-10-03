@@ -98,19 +98,21 @@ class MultiTestingRunner(Runner):
                 self.multi_test_replicate,
                 verbose=self.verbose,
             )
-            print(
-                "\n Output Location for subrunner {} : {} ".format(
-                    desc_index, logger_paths["test_run_path"]
+            if self.verbose and get_platform().is_primary_process:
+                print(
+                    "\n Output Location for subrunner {} : {} ".format(
+                        desc_index, logger_paths["test_run_path"]
+                    )
                 )
-            )
         multi_logger_paths = self.multi_desc.run_path(
             self.multi_train_replicate, self.multi_test_replicate, verbose=self.verbose
         )
-        print(
-            "\n Final output location for multi runner : {}".format(
-                multi_logger_paths["feedback_path"]
+        if self.verbose and get_platform().is_primary_process:
+            print(
+                "\n Final output location for multi runner : {}".format(
+                    multi_logger_paths["feedback_path"]
+                )
             )
-        )
 
     def run(self):
         num_sub_runners = self.get_num_sub_runners()
@@ -133,7 +135,9 @@ class MultiTestingRunner(Runner):
         standard_accuracy = [] if standard_eval else None
         isotropic_robust_accuracy = [] if isotropic_robust_eval else None
         nonisotropic_robust_accuracy = [] if nonisotropic_robust_eval else None
+        output_locations = []
         for sub_runner_index, sub_runner in enumerate(sub_runner_list):
+            sub_runner_dict = {}
             if self.verbose and get_platform().is_primary_process:
                 print(
                     "=" * 82
@@ -158,17 +162,92 @@ class MultiTestingRunner(Runner):
                 nonisotropic_robust_accuracy.append(
                     feedback["nonisotropic_robust_evaluation_test"]["robust_accuracy"]
                 )
-            return_dict["full_run_path"] = full_run_path
-            return_dict["feedback"] = feedback
-            return_dict["logger_paths"] = logger_paths
+            # return_dict["full_run_path"] = full_run_path
+            sub_runner_dict["feedback"] = feedback
+            sub_runner_dict["full_run_path"] = full_run_path
+            sub_runner_dict["logger_paths"] = logger_paths
+            if standard_eval:
+                sub_runner_dict["standard_accuracy"] = feedback[
+                    "standard_evaluation_test"
+                ]["test_accuracy"]
+            else:
+                sub_runner_dict["standard_accuracy"] = None
+
+            if isotropic_robust_eval:
+                sub_runner_dict["isotropic_robust_accuracy"] = feedback[
+                    "isotropic_robust_evaluation_test"
+                ]["robust_accuracy"]
+            else:
+                sub_runner_dict["isotropic_robust_accuracy"] = None
+
+            if nonisotropic_robust_eval:
+                sub_runner_dict["nonisotropic_robust_accuracy"] = feedback[
+                    "nonisotropic_robust_evaluation_test"
+                ]["robust_accuracy"]
+            else:
+                sub_runner_dict["nonisotropic_robust_accuracy"] = None
+
+            return_dict[sub_runner_index] = sub_runner_dict
 
         multi_logger_paths = self.multi_desc.run_path(
             self.multi_train_replicate, self.multi_test_replicate, verbose=self.verbose
         )
-        torch.save(
-            return_dict,
-            os.path.join(multi_logger_paths["feedback_path"], "feedback_dicts.pt"),
-        )
+        if self.verbose and get_platform().is_primary_process:
+            print("Multi logger paths is : ", multi_logger_paths)
+            print(
+                "\n Saving return dicts at {}".format(
+                    multi_logger_paths["feedback_path"]
+                )
+            )
+            if not get_platform().exists(multi_logger_paths["feedback_path"]):
+                get_platform().makedirs(multi_logger_paths["feedback_path"])
+
+            torch.save(
+                return_dict,
+                os.path.join(
+                    multi_logger_paths["feedback_path"], "evaluation_return_dict.pt"
+                ),
+            )
+
+        if self.verbose and get_platform().is_primary_process:
+            print(
+                "=" * 82
+                + f"\n Result of Test Evaluations (Replicate {sub_runner.test_replicate})\n"
+                + "-" * 82
+            )
+
+        for sub_runner_index, sub_runner in enumerate(sub_runner_list):
+            logger_paths = desc_list[sub_runner_index].run_path(
+                self.multi_train_replicate,
+                self.multi_test_replicate,
+                verbose=False,
+            )
+            if self.verbose and get_platform().is_primary_process:
+                print(
+                    "\n Output Location for subrunner {} : {} ".format(
+                        sub_runner_index, return_dict[sub_runner_index]["full_run_path"]
+                    )
+                )
+                if standard_eval:
+                    print(
+                        "\n Standard Accuracy for subrunner {} : {} ".format(
+                            sub_runner_index, standard_accuracy[sub_runner_index]
+                        )
+                    )
+                if isotropic_robust_eval:
+                    print(
+                        "\n Isotropic Robust Accuracy for subrunner {} : {} ".format(
+                            sub_runner_index,
+                            isotropic_robust_accuracy[sub_runner_index],
+                        )
+                    )
+                if nonisotropic_robust_eval:
+                    print(
+                        "\n Nonisotropic Robust Accuracy for subrunner {} : {} ".format(
+                            sub_runner_index,
+                            nonisotropic_robust_accuracy[sub_runner_index],
+                        )
+                    )
 
         if standard_eval and nonisotropic_robust_eval:
             scatter_plot(
@@ -191,3 +270,31 @@ class MultiTestingRunner(Runner):
                 "isotropic_accuracy",
                 "Isotropic Robust Accuracy vs Non isotropic Robust Accuracy",
             )
+
+        if standard_eval and isotropic_robust_eval:
+            scatter_plot(
+                isotropic_robust_accuracy,
+                standard_accuracy,
+                multi_logger_paths["feedback_path"],
+                "standard_vs_isotropic",
+                "isotropic_robust_accuracy",
+                "standard_accuracy",
+                "Standard Accuracy vs Isotropic Robust Accuracy",
+            )
+
+        # what should I save
+        # Each subrunner has feedback, and a full_run_path
+        # Each subrunner corresponds to a specific model - either learned with standard/adv/N-adv training or a pretrained model from robustbenchmark
+        # feedback saves the output of evaluations from evaluation suite in a nested dictionary format
+        # feedback[standard_evaluation_test][test_accuracy] gives the standard accuracy
+        # feedback[standard_evaluation_test][test_loss] gives the standard loss
+
+        # feedback[isotropic_robust_evaluation_test][robust_accuracy] gives the isotropic robust accuracy
+        # feedback[isotropic_robust_evaluation_test][histogram_attack_statistics] stores the distribution of nonisotropic threat for isotropic lp adversarial corruptions
+
+        # feedback[non_isotropic_robust_evaluation_test][robust_accuracy] gives the nonisotropic robust accuracy
+        # feedback[non_isotropic_robust_evaluation_test][histogram_attack_statistics] stores the distribution of nonisotropic threat for isotropic lp adversarial corruptions. This bit is only to sanity check the constraint.
+
+        # multi-runner collects the different feedbacks from subrunners and saves them in a dictionary called return_dict
+
+        # for every

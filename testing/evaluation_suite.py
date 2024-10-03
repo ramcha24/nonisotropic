@@ -145,7 +145,7 @@ def create_robust_eval(
             eps=attack_power,
             # log_path=os.path.join(eval_dir, attack_str),
             device=get_platform().torch_device,
-            verbose=False,  # get_platform().is_primary_process,
+            verbose=get_platform().is_primary_process,
         )
         # for simplicity
         adversary.attacks_to_run = ["apgd-ce"]

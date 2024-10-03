@@ -53,6 +53,23 @@ def standard_test(
         checkpoint = get_platform().load_model(
             checkpoint_location, map_location=torch.device("cpu")
         )
+        # Handle DataParallel.
+        module_in_name = get_platform().is_parallel
+        if module_in_name and not all(
+            k.startswith("module.") for k in checkpoint["model_state_dict"]
+        ):
+            checkpoint["model_state_dict"] = {
+                "module." + k: v for k, v in checkpoint["model_state_dict"].items()
+            }
+        elif (
+            all(k.startswith("module.") for k in checkpoint["model_state_dict"])
+            and not module_in_name
+        ):
+            checkpoint["model_state_dict"] = {
+                k[len("module.") :]: v
+                for k, v in checkpoint["model_state_dict"].items()
+            }
+
         model.load_state_dict(checkpoint["model_state_dict"])
     else:
         assert model_type == "pretrained", f"Invalid model_type {model_type}"

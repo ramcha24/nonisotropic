@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Optional
 
 from cli import arg_utils
@@ -58,6 +58,7 @@ class JobArgs(hparams.Hparams):
     )
     # Why should evaluate_only_at_end , evaluate_only_batch_test and evalaute_every_few_epoch be listed here?
 
+
 @dataclass
 class ToggleArgs(hparams.Hparams):
     model_type: str = None
@@ -76,6 +77,7 @@ class ToggleArgs(hparams.Hparams):
         "Add non-isotropic adversarial training for all sub-runners"
     )
     # resolve consistent naming toggle vs multi
+
 
 @dataclass
 class MultiTestArgs(hparams.Hparams):
@@ -259,6 +261,7 @@ def maybe_get_default_hparams(runner_name: str = None):
             ]
 
         else:  # model_type == "pretrained"
+            # for finetuning pretrained models.
             threat_model = (
                 threat_model or "Linf"
             )  # for now Linf is the default and only threat model
@@ -278,9 +281,21 @@ def maybe_get_default_hparams(runner_name: str = None):
                     param_str="model",
                 )
                 training_hparams = models.registry.get_default_hparams(
-                    model_name, dataset_name, param_str="training"
+                    model_name,
+                    dataset_name,
+                    threat_model,
+                    model_type,
+                    param_str="training",
                 )
+                if dataset_name != "imagenet":
+                    dataset_dict = asdict(dataset_hparams)
+                    dataset_dict["batch_size"] = 128
+                    dataset_hparams = hparams.DatasetHparams(**dataset_dict)
 
+                # training_dict = asdict(training_hparams)
+                # training_dict["N_adv_train"] = True
+                # training_hparams = hparams.TrainingHparams(**training_dict)
+                # # replace batch_size in dataset_hparams
                 train_desc = TrainingDesc(
                     dataset_hparams,
                     model_hparams,
