@@ -207,11 +207,12 @@ cython_debug/
 *.gz
 *.pkl
 *.txt
-*.csv
 *.log
 
 # data files 
 *.arrow
+*.json
+*.csv
 
 #images 
 *.JPEG
