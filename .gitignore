@@ -198,6 +198,7 @@ cython_debug/
 /threat_specification/imagenet/
 
 /scripts/models/
+/.vscode/
 
 #checkpoint files 
 *.pt
