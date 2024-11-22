@@ -35,5 +35,9 @@ class Platform(base.Platform):
         return os.path.join(pathlib.Path.home(), "nonisotropic/datasets")
 
     @property
+    def model_root(self):
+        return os.path.join(pathlib.Path.home(), "nonisotropic/models")
+
+    @property
     def threat_specification_root(self):
         return os.path.join(pathlib.Path.home(), "nonisotropic/threat_specification")

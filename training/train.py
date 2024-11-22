@@ -1,6 +1,7 @@
 import typing
 import warnings
 import torch
+from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn, update_bn
 from torchvision.transforms import v2
 import numpy as np
 from torch.autograd import Variable
@@ -25,22 +26,47 @@ from training.metric_logger import MetricLogger
 from training.adv_train_util import get_attack
 from utilities.evaluation_utils import report_adv
 
-from threat_specification.projected_displacement import non_isotropic_projection
-from threat_specification.greedy_subset import load_threat_specification
+from threat_specification.projected_displacement_old import non_isotropic_projection
+from threat_specification.subset_selection import load_threat_specification
+
+from threat_specification.projected_displacement import ProjectedDisplacement
+
+from utilities.miscellaneous import timeprint, _cast, _move
 
 
-def filter_invalid(inputs, labels):
-    valid_indices = []
-    for i in range(len(labels)):
-        if labels[i] >= 0 and labels[i] < 1000:
-            valid_indices.append(i)
-    return inputs[valid_indices], labels[valid_indices]
+def filter_invalid(inputs, labels, range_min=0, range_max=None, target_range=None):
+    # Type-checking
+    if range_max and not isinstance(range_max, int):
+        raise TypeError("range_max if provided must be an integer")
+    if target_range and not isinstance(target_range, list):
+        raise TypeError("target_labels if provided must be a list")
+
+    # Initialize a default mask to include all elements
+    mask = torch.ones(labels.shape, dtype=torch.bool)
+
+    # Create masks based on conditions
+    if range_max:
+        range_mask = (labels >= range_min) & (labels < range_max)
+        mask = mask & range_mask
+
+    if target_range:
+        target_mask = torch.isin(labels, torch.tensor(target_labels))
+        mask = mask & target_mask
+
+    # valid_indices = []
+    # for i in range(len(labels)):
+    #     if labels[i] >= 0 and labels[i] < num_labels:
+    #         valid_indices.append(i)
+    # return inputs[valid_indices], labels[valid_indices]
+
+    return inputs[mask], labels[mask]
 
 
 def train(
     dataset_hparams: hparams.DatasetHparams,
     augment_hparams: hparams.AugmentationHparams,
     training_hparams: hparams.TrainingHparams,
+    threat_hparams: hparams.ThreatHparams,
     model: Model,
     train_loader: DataLoader,
     output_location: str,
@@ -49,7 +75,8 @@ def train(
     end_step: Step = None,
 ):
 
-    """The main training loop for this framework.
+    """
+    The main training loop for this framework.
 
     Args:
       * dataset_hparams: The dataset hyperparameters whose schema is specified in hparams.py.
@@ -75,7 +102,19 @@ def train(
         get_platform().makedirs(output_location)
 
     # get the optimizer and learning rate schedule.
+
+    # Prepare the model
     model.to(get_platform().torch_device)
+    model.train()
+    ema_model = (
+        AveragedModel(
+            model, multi_avg_fn=get_ema_multi_avg_fn(training_hparams.ema_decay)
+        )
+        if training_hparams.ema
+        else None
+    )
+
+    # Prepare the optimizer
     optimizer = optimizers.get_optimizer(training_hparams, model)
     step_optimizer = optimizer
     lr_schedule = optimizers.get_lr_schedule(
@@ -85,9 +124,18 @@ def train(
     # Get the random seed for the data order.
     data_order_seed = training_hparams.data_order_seed
 
-    # Restore the model from a saved checkpoint if the checkpoint exists
+    # Prepare for automatic mixed precision training
+    scaler = torch.GradScaler("cuda", enabled=training_hparams.use_amp)
+    cast_type = torch.float16 if training_hparams.float_16 else torch.float32
+
+    # Restore training from a saved checkpoint if the checkpoint exists
     cp_step, cp_logger = restore_checkpoint(
-        output_location, model, optimizer, train_loader.iterations_per_epoch
+        output_location,
+        model,
+        optimizer,
+        scaler,
+        ema_model,
+        train_loader.iterations_per_epoch,
     )
 
     # Handle parallelism if applicable.
@@ -109,149 +157,200 @@ def train(
         return
 
     if augment_hparams.N_aug or training_hparams.N_adv_train:
-        threat_specification = load_threat_specification(dataset_hparams)
+        threat_model = ProjectedDisplacement(dataset_hparams, threat_hparams)
+        threat_model.prepare(num_devices=torch.cuda.device_count())
 
     if augment_hparams.N_aug or augment_hparams.mixup:
         raise ValueError(
             "Data augmentation is not supported in this version of the code"
         )
 
-    torch.set_float32_matmul_precision("medium")
+    if training_hparams.adv_train or training_hparams.N_adv_train:
+        attack_fn, attack_power, attack_step, attack_iters = get_attack(
+            training_hparams
+        )
 
-    grad_accumulation_iter = 1  # Default value
-    if dataset_hparams.dataset_name == "imagenet":
-        grad_accumulation_iter = 5
+    torch.set_float32_matmul_precision("medium")
+    # torch.autograd.set_detect_anomaly(True, check_nan=True)
 
     # The training loop.
     for epoch in range(start_step.ep, end_step.ep + 1):
+        # Advance the data loader until the start epoch
+        if epoch < start_step.ep:
+            continue
+
         train_loader.shuffle(
             None if data_order_seed is None else (data_order_seed + epoch)
         )
 
         for iteration, (examples, labels) in enumerate(train_loader):
-            # Filter out invalid labels
-            examples, labels = filter_invalid(examples, labels)
-
-            # if iteration % 10 == 0 and get_platform().is_primary_process:
-            #     print("Epoch: {}, Iteration: {}".format(epoch, iteration))
-
-            augmentation_flag = False  # True
-            # (torch.rand(1).item() <= (1 / augment_hparams.augmentation_frequency) + 1e-2)
-
-            # Advance the data loader until the start epoch and iteration
+            # Advance the data loader until start step iteration of the start step epoch
             if epoch == start_step.ep and iteration < start_step.it:
                 continue
 
             # Run the call backs
             step = Step.from_epoch(epoch, iteration, train_loader.iterations_per_epoch)
             for callback in callbacks:
-                callback(output_location, step, model, optimizer, logger)
+                callback(
+                    output_location, step, model, optimizer, logger, scaler, ema_model
+                )
 
-            # Exit at the end step
+            # Exit if at the end step
             if epoch == end_step.ep and iteration == end_step.it:
                 return
 
-            # Train!
-            examples = examples.to(device=get_platform().torch_device)
-            labels = labels.to(device=get_platform().torch_device)
+            # Okay looks like we do have to train ... let's do it
 
-            model.train()
+            # Filter out invalid labels
+            examples, labels = filter_invalid(examples, labels)
 
-            examples_clone_std = examples.detach().clone()
-            labels_clone_std = labels.detach().clone()
+            # timeprint(
+            #     "Epoch: {}, Iteration: {}".format(epoch, iteration),
+            #     condition=iteration % 500 == 0,
+            # )
 
-            outputs_std = model(examples_clone_std)
-            loss_std = (
-                model.loss_criterion(outputs_std, labels_clone_std)
-                / grad_accumulation_iter
-            )
+            augmentation_flag = False  # True # (torch.rand(1).item() <= (1 / augment_hparams.augmentation_frequency) + 1e-2)
 
-            loss_std.backward()
+            # Run the forward pass with automatic mixed precision if required.
+            with torch.autograd.detect_anomaly(check_nan=True):
+                with torch.autocast(
+                    device_type="cuda",  # get_platform().torch_device,
+                    dtype=cast_type,
+                    enabled=training_hparams.use_amp,
+                ):
+                    if examples.dtype != cast_type:
+                        examples = _cast(examples, cast_type)
 
-            if augment_hparams.N_aug and augmentation_flag:
-                pass  # no-op
+                    # To do. right a function to handle moving to devices that includes the if check.
+                    examples = examples.clone().detach()
+                    labels = labels.clone().detach()
+                    examples_clone = examples.clone().detach()  # detach().clone()
+                    labels_clone = labels.clone().detach()  # detach().clone()
 
-            if augment_hparams.mixup and augmentation_flag:
-                pass  # no-op
+                    examples = _move(examples, get_platform().torch_device)
+                    labels = _move(labels, get_platform().torch_device)
+                    examples_clone = _move(examples_clone, get_platform().torch_device)
+                    labels_clone = _move(labels_clone, get_platform().torch_device)
 
-            if (
-                training_hparams.adv_train
-                and epoch >= training_hparams.adv_train_start_epoch
-            ):
-                # if iteration % 10 == 0 and get_platform().is_primary_process:
-                #     print("Doing adv-training")
+                    if torch.isnan(examples).any():
+                        raise ValueError(f"NaN in {name}")
+                    print("examples are okay")
+                    print(f"Examples average {examples.mean()}")
+                    print(f"Examples std {examples.std()}")
+                    print(f"Examples max {examples.max()}")
+                    print(f"Examples min {examples.min()}")
+                    if torch.isnan(labels).any():
+                        raise ValueError(f"NaN in {name}")
+                    print("labels are okay")
 
-                examples_adv_train = examples.detach().clone()
-                labels_adv_train = labels.detach().clone()
-
-                attack_fn, attack_power = get_attack(training_hparams)
-
-                examples_adv_train += attack_fn(
-                    model,
-                    examples_adv_train,
-                    labels_adv_train,
-                    attack_power,
-                    attack_power / 10,
-                    training_hparams.adv_train_attack_iter,
-                )
-                loss_adv_train = (
-                    0.5
-                    * model.loss_criterion(model(examples_adv_train), labels_adv_train)
-                ) / grad_accumulation_iter
-                loss_adv_train.backward()
-
-            if (
-                training_hparams.N_adv_train
-                and epoch >= training_hparams.adv_train_start_epoch
-            ):
-                # if iteration % 10 == 0 and get_platform().is_primary_process:
-                #     print("Doing N-adv-training")
-
-                examples_N_adv_train = examples.detach().clone()
-                labels_N_adv_train = labels.detach().clone()
-
-                attack_fn, attack_power = get_attack(training_hparams)
-                attack_power *= 4
-                perturbation = attack_fn(
-                    model,
-                    examples_N_adv_train,
-                    labels_N_adv_train,
-                    attack_power,
-                    attack_power / 10,
-                    training_hparams.adv_train_attack_iter,
-                )
-
-                examples_N_adv_train = non_isotropic_projection(
-                    examples_N_adv_train,
-                    labels_N_adv_train,
-                    examples_N_adv_train + perturbation,
-                    threat_specification,
-                    threshold=training_hparams.N_threshold,
-                    # verbose=(epoch % 5 == 0 and iteration % 25 == 0),
-                )
-
-                loss_N_adv_train = (
-                    0.5
-                    * model.loss_criterion(
-                        model(examples_N_adv_train), labels_N_adv_train
+                    loss = (
+                        model.loss_criterion(model(examples), labels)
+                        / training_hparams.grad_accumulation_steps
                     )
-                    / grad_accumulation_iter
-                )
-                loss_N_adv_train.backward()
-                del perturbation
+                    for name, param in model.named_parameters():
+                        if torch.isnan(param).any():
+                            raise ValueError(f"NaN in {name}")
+                        if torch.isinf(param).any():
+                            raise ValueError(f"Inf in {name}")
+                        if param.grad is not None and torch.isnan(param.grad).any():
+                            raise ValueError(f"NaN gradient in {name}")
+                    print("model parameters are okay")
+                    output = model(examples)
+                    if torch.isnan(output).any():
+                        raise ValueError(f"NaN in output")
+                    print("output is okay")
 
-            # Step forward at the frequency specified by gradient accumulation. Ignore warnings that the lr_schedule generates.
-            if ((iteration + 1) % grad_accumulation_iter == 0) or (
-                iteration + 1 == len(train_loader)
-            ):
-                step_optimizer.step()
-                step_optimizer.zero_grad()
+                    print(model.loss_criterion(output, labels))
+                    print(loss)
+                    if torch.isnan(loss).any():
+                        raise ValueError(f"NaN in loss")
+                    print("loss is okay")
+                    # timeprint(examples.requires_grad, examples.grad_fn)
+                    # timeprint("how is loss looking like?")
+                    # timeprint(loss.requires_grad, loss.grad_fn)
 
-                with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", category=UserWarning)
-                    lr_schedule.step()
+                    if augmentation_flag and (
+                        augment_hparams.N_aug or augment_hparams.mixup
+                    ):
+                        pass  # no-op right now
 
-    get_platform().barrier()
+                    # epoch >= training_hparams.adv_train_start_epoch and
+                    if training_hparams.adv_train or training_hparams.N_adv_train:
+                        perturbed_examples = examples + attack_fn(
+                            model,
+                            examples_clone,
+                            labels_clone,
+                            attack_power
+                            * (examples_clone.max() - examples_clone.min()),
+                            attack_step * (examples_clone.max() - examples_clone.min()),
+                            attack_iters,
+                        )
+
+                        if training_hparams.N_adv_train:
+                            perturbed_examples = threat_model.project(
+                                examples_clone,
+                                labels_clone,
+                                perturbed_examples,
+                                threshold=training_hparams.N_threshold,
+                                gray_scale=not training_hparams.N_multi_channel,
+                                lazy_project=not threat_hparams.exact_project,
+                            )
+                        # timeprint("how are perturbed examples looking like?")
+                        # timeprint(
+                        #    perturbed_examples.requires_grad, perturbed_examples.grad_fn
+                        # )
+                        loss_adv = (
+                            1.0
+                            * model.loss_criterion(
+                                model(perturbed_examples), labels_clone
+                            )
+                        ) / training_hparams.grad_accumulation_steps
+                        # timeprint("how is adv loss looking like?")
+                        # timeprint(loss_adv.requires_grad, loss_adv.grad_fn)
+
+                        # del examples_clone, labels_clone
+
+                for name, param in model.named_parameters():
+                    if torch.isnan(param).any():
+                        print(f"NaN in {name}")
+                    if torch.isinf(param).any():
+                        print(f"Inf in {name}")
+                    if param.grad is not None and torch.isnan(param.grad).any():
+                        print(f"NaN gradient in {name}")
+
+                # loss.backward()
+                scaler.scale(loss).backward()
+                if training_hparams.adv_train or training_hparams.N_adv_train:
+                    # print("backward for adv loss")
+                    scaler.scale(loss_adv).backward()
+
+                # Step forward at the frequency specified by gradient accumulation.
+                if (
+                    (iteration + 1) % training_hparams.grad_accumulation_steps == 0
+                ) or (iteration + 1 == len(train_loader)):
+
+                    # Gradient Value Clipping if needed
+                    scaler.unscale_(step_optimizer)
+                    # torch.nn.utils.clip_grad_norm_(
+                    #     model.parameters(), max_norm=1e2, norm_type=2
+                    # )
+                    # Gradient Value Clipping
+                    torch.nn.utils.clip_grad_value_(model.parameters(), clip_value=1.0)
+
+                    scaler.step(step_optimizer)
+                    if training_hparams.ema:
+                        ema_model.update_parameters(model)
+                    scaler.update()
+
+                    # Ignore warnings that the lr_schedule generates.
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("ignore", category=UserWarning)
+                        lr_schedule.step()
+
+                    step_optimizer.zero_grad()
+
+    # get_platform().barrier()
+    timeprint("Training complete at last.")
 
 
 def standard_train(
@@ -260,12 +359,20 @@ def standard_train(
     start_step: Step = None,
     verbose: bool = True,
     evaluate_every_epoch: bool = False,
-    evaluate_every_few_epoch: int = 10,
+    evaluate_every_few_epoch: int = 5,
 ):
     """Train using the standard callbacks according to the provided hparams."""
+    if desc.training_hparams.adv_train and desc.training_hparams.N_adv_train:
+        timeprint("Will not do both adv_train and N_adv_train at the same time.")
+        return
+
+    if desc.augment_hparams.N_aug or desc.augment_hparams.mixup:
+        timeprint("Data augmentation is not supported in this version of the code.")
+        return
+
+    # Don't reinvent the wheel.
     already_trained = False
     if get_platform().exists(output_location):
-        # If the model file for the end of training already exists in this location, do not train
         iterations_per_epoch = datasets.registry.iterations_per_epoch(
             desc.dataset_hparams
         )
@@ -276,10 +383,8 @@ def standard_train(
             output_location, train_end_step
         ) and get_platform().exists(paths.logger(output_location)):
             already_trained = True
-
     if already_trained:
-        if get_platform().is_primary_process:
-            print("Training model already exists. Skipping.")
+        timeprint("Training model already exists. Skipping.")
         return
 
     # need to train a model, get its initialized/pretrained weights
@@ -302,6 +407,7 @@ def standard_train(
         desc.dataset_hparams,
         desc.augment_hparams,
         desc.training_hparams,
+        desc.threat_hparams,
         model,
         train_loader,
         output_location,

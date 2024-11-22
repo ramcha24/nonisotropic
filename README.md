@@ -105,3 +105,16 @@ To test multiple models identified by a model_type ("pretrained/finetuned") or a
 
 python nonisotropic.py multi_test --dataset_name=cifar10 --model_name=cifar10_resnet_50 --toggle_N_aug --toggle_N_adv_train --standard_eval
 ```
+
+### Threat specification functionality
+
+```
+
+threat_model := ProjectedDisplacement(threat_hparams(num_chunks=True), weighted=True, segmented=False)
+
+threat_model.prepare(num_devices=5)
+
+threat_model.evaluate(examples, labels, perturbed_examples)
+
+threat_model.project(examples, labels, perturbed_examples)
+```

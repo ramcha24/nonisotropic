@@ -3,7 +3,7 @@ from training.runner import TrainingRunner
 from testing.runner import TestingRunner
 from multi_testing.runner import MultiTestingRunner
 from multi_training.runner import MultiTrainingRunner
-from threat_specification.runner import ThreatRunner
+from threat_specification.runner import ComputeThreatRunner, EvaluateThreatRunner
 from models.pretrained.runner import PretrainRunner
 
 registered_runners = {
@@ -11,8 +11,9 @@ registered_runners = {
     "test": TestingRunner,
     "multi_test": MultiTestingRunner,
     "multi_train": MultiTrainingRunner,
-    "compute_threat": ThreatRunner,
+    "compute_threat": ComputeThreatRunner,
     "download_pretrained": PretrainRunner,
+    "evaluate_threat": EvaluateThreatRunner,
 }
 
 # To Do: runners

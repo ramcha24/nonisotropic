@@ -5,8 +5,8 @@ from random import randrange
 from autoattack import AutoAttack
 
 
-from threat_specification.greedy_subset import load_threat_specification
-from threat_specification.projected_displacement import (
+from threat_specification.subset_selection import load_threat_specification
+from threat_specification.projected_displacement_old import (
     non_isotropic_projection,
     non_isotropic_threat,
 )

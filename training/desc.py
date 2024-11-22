@@ -18,6 +18,7 @@ class TrainingDesc(desc.Desc):
     model_hparams: hparams.ModelHparams
     augment_hparams: hparams.AugmentationHparams
     training_hparams: hparams.TrainingHparams
+    threat_hparams: hparams.ThreatHparams
 
     @staticmethod
     def name_prefix():
@@ -45,6 +46,11 @@ class TrainingDesc(desc.Desc):
             defaults=defaults.training_hparams if defaults else None,
             prefix=prefix,
         )
+        hparams.ThreatHparams.add_args(
+            parser,
+            defaults=defaults.threat_hparams if defaults else None,
+            prefix=prefix,
+        )
 
     @staticmethod
     def create_from_args(args: argparse.Namespace) -> "TrainingDesc":
@@ -52,9 +58,14 @@ class TrainingDesc(desc.Desc):
         model_hparams = hparams.ModelHparams.create_from_args(args)
         augment_hparams = hparams.AugmentationHparams.create_from_args(args)
         training_hparams = hparams.TrainingHparams.create_from_args(args)
+        threat_hparams = hparams.ThreatHparams.create_from_args(args)
 
         return TrainingDesc(
-            dataset_hparams, model_hparams, augment_hparams, training_hparams
+            dataset_hparams,
+            model_hparams,
+            augment_hparams,
+            training_hparams,
+            threat_hparams,
         )
 
     @property
@@ -203,6 +214,7 @@ class TrainingDesc(desc.Desc):
                 self.augment_hparams.display,
                 self.model_hparams.display,
                 self.training_hparams.display,
+                self.threat_hparams.display,
             ]
         )
 

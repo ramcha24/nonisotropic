@@ -52,7 +52,7 @@ imagenet_Linf_RB_model_names = [
     "Singh2023Revisiting_ViT-B-ConvStem",
     "Singh2023Revisiting_ConvNeXt-S-ConvStem",
     "Singh2023Revisiting_ConvNeXt-T-ConvStem",
-    "Peng2023Robust",
+    # "Peng2023Robust",
     "Singh2023Revisiting_ViT-S-ConvStem",
     "Debenedetti2022Light_XCiT-L12",
     "Debenedetti2022Light_XCiT-M12",

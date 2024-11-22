@@ -1,5 +1,6 @@
 import time
 import torch
+from torch.optim.swa_utils import update_bn
 
 from datasets.base import DataLoader
 
@@ -13,25 +14,32 @@ from training.adv_train_util import get_attack
 
 from utilities.evaluation_utils import correct, get_soft_margin
 from utilities.plotting_utils import plot_soft_margin
+from utilities.miscellaneous import timeprint
 
 
 # Standard callbacks.
-def save_model(output_location, step, model, optimizer, logger):
-    model.save(output_location, step)
+def save_model(
+    output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+):
+    model.save(output_location, step, ema_model=ema_model)
 
 
-def save_logger(output_location, step, model, optimizer, logger):
+def save_logger(
+    output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+):
     logger.save(output_location)
 
 
 def create_timekeeper_callback():
     time_of_last_call = None
 
-    def callback(output_location, step, model, optimizer, logger):
+    def callback(
+        output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+    ):
         if get_platform().is_primary_process:
             nonlocal time_of_last_call
             t = 0.0 if time_of_last_call is None else time.time() - time_of_last_call
-            print(f"Epoch {step.ep}\tIteration {step.it}\tTime Elapsed {t:.2f}")
+            timeprint(f"Epoch {step.ep}\tIteration {step.it}\tTime Elapsed {t:.2f}")
             time_of_last_call = time.time()
         get_platform().barrier()
 
@@ -43,7 +51,9 @@ def create_eval_callback(eval_name: str, loader: DataLoader, verbose=False):
 
     time_of_last_call = None
 
-    def eval_callback(output_location, step, model, optimizer, logger):
+    def eval_callback(
+        output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+    ):
         example_count = torch.tensor(0.0).to(get_platform().torch_device)
         total_loss = torch.tensor(0.0).to(get_platform().torch_device)
         total_correct = torch.tensor(0.0).to(get_platform().torch_device)
@@ -88,7 +98,7 @@ def create_eval_callback(eval_name: str, loader: DataLoader, verbose=False):
                 elapsed = (
                     0 if time_of_last_call is None else time.time() - time_of_last_call
                 )
-                print(
+                timeprint(
                     "{}\t epoch {:03d}\t iteration {:03d}\t loss {:.3f} \t accuracy {:.2f}%\t examples {:d}\t time {:.2f}s".format(
                         eval_name,
                         step.ep,
@@ -105,24 +115,60 @@ def create_eval_callback(eval_name: str, loader: DataLoader, verbose=False):
     return eval_callback
 
 
+def create_bn_callback(loader: DataLoader, verbose=False):
+    """This function returns a callback."""
+    # expects the training loader.
+    time_of_last_call = None
+
+    def bn_callback(
+        output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+    ):
+
+        if ema_model:
+            update_bn(loader, ema_model)
+
+            if verbose and get_platform().is_primary_process:
+                nonlocal time_of_last_call
+                elapsed = (
+                    0 if time_of_last_call is None else time.time() - time_of_last_call
+                )
+                timeprint(
+                    "Updated Batch norm statistics for ema model (time taken : {:.2f}s)".format(
+                        elapsed
+                    )
+                )
+
+                time_of_last_call = time.time()
+
+    return bn_callback
+
+
 # Callback frequencies. Each takes a callback as an argument and returns a new callback
 # that runs only at the specified frequency.
 def run_every_epoch(callback):
-    def modified_callback(output_location, step, model, optimizer, logger):
+    def modified_callback(
+        output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+    ):
         if step.it != 0:
             return
-        callback(output_location, step, model, optimizer, logger)
+        callback(
+            output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+        )
 
     return modified_callback
 
 
 def run_every_few_epoch(callback, k):
-    def modified_callback(output_location, step, model, optimizer, logger):
+    def modified_callback(
+        output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+    ):
         if step.it != 0:
             return
         if step.ep % k != 0:
             return
-        callback(output_location, step, model, optimizer, logger)
+        callback(
+            output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+        )
 
     return modified_callback
 
@@ -132,10 +178,14 @@ def run_every_step(callback):
 
 
 def run_at_step(step1, callback):
-    def modified_callback(output_location, step, model, optimizer, logger):
+    def modified_callback(
+        output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+    ):
         if step != step1:
             return
-        callback(output_location, step, model, optimizer, logger)
+        callback(
+            output_location, step, model, optimizer, logger, scaler=None, ema_model=None
+        )
 
     return modified_callback
 
@@ -160,9 +210,11 @@ def standard_callbacks(
     train_eval_callback = create_eval_callback(
         "train", train_set_loader, verbose=verbose
     )
+    post_train_bn_callback = create_bn_callback(train_set_loader, verbose=verbose)
 
     # Basic checkpointing and state saving at the beginning and end.
     result = [
+        run_at_step(end, post_train_bn_callback),
         run_at_step(end, save_model),
         run_at_step(end, save_logger),
         run_every_epoch(checkpointing.save_checkpoint_callback),

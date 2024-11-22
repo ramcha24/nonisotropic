@@ -51,7 +51,7 @@ class Model(torch.nn.Module, abc.ABC):
 
         pass
 
-    def save(self, save_location: str, save_step: Step):
+    def save(self, save_location: str, save_step: Step, ema_model=None):
         if not get_platform().is_primary_process:
             return
         if not get_platform().exists(save_location):
@@ -59,6 +59,10 @@ class Model(torch.nn.Module, abc.ABC):
         get_platform().save_model(
             self.state_dict(), paths.model(save_location, save_step)
         )
+        if ema_model:
+            get_platform().save_model(
+                ema_model.state_dict(), paths.ema_model(save_location, save_step)
+            )
 
 
 class DistributedDataParallel(Model, torch.nn.parallel.DistributedDataParallel):

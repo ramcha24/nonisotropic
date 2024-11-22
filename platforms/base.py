@@ -105,6 +105,12 @@ class Platform(Hparams):
 
     @property
     @abc.abstractmethod
+    def model_root(self):
+        """The root directory where models will be stored"""
+        pass 
+    
+    @property
+    @abc.abstractmethod
     def threat_specification_root(self):
         """The root directory where datasets will be stored"""
         pass

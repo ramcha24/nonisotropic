@@ -339,7 +339,7 @@ def clean_accuracy(
     model: nn.Module,
     x: torch.Tensor,
     y: torch.Tensor,
-    batch_size: int = 100,
+    batch_size: int = 4,  # 16,
     device: torch.device = None,
 ):
     if device is None:

@@ -16,6 +16,7 @@ class ThreatDesc(desc.Desc):
 
     dataset_hparams: hparams.DatasetHparams
     threat_hparams: hparams.ThreatHparams
+    perturbation_hparams: hparams.PerturbationHparams
 
     @staticmethod
     def name_prefix() -> str:
@@ -35,12 +36,18 @@ class ThreatDesc(desc.Desc):
             defaults=defaults.threat_hparams if defaults else None,
             prefix=prefix,
         )
+        hparams.PerturbationHparams.add_args(
+            parser,
+            defaults=defaults.perturbation_hparams if defaults else None,
+            prefix=prefix,
+        )
 
     @staticmethod
     def create_from_args(args: argparse.Namespace) -> "ThreatDesc":
         dataset_hparams = hparams.DatasetHparams.create_from_args(args)
         threat_hparams = hparams.ThreatHparams.create_from_args(args)
-        return ThreatDesc(dataset_hparams, threat_hparams)
+        perturbation_hparams = hparams.PerturbationHparams.create_from_args(args)
+        return ThreatDesc(dataset_hparams, threat_hparams, perturbation_hparams)
 
     def run_path(self, threat_replicate: int = 1, verbose: bool = False) -> dict:
         """_summary_
@@ -76,9 +83,10 @@ class ThreatDesc(desc.Desc):
         dataset_dir = self.dataset_hparams.dataset_name
         logger_paths["dataset_path"] = os.path.join(root_location, dataset_dir)
 
-        threat_dir = self.threat_hparams.dir_path(
-            identifier_name="subset_selection"
-        )  # greedy_xx
+        threat_dir = "greedy"
+        # self.threat_hparams.dir_path(
+        #     identifier_name="subset_selection"
+        # )  # greedy_xx
 
         logger_paths["threat_hparams_path"] = os.path.join(
             logger_paths["dataset_path"],
@@ -114,12 +122,13 @@ class ThreatDesc(desc.Desc):
             [
                 self.dataset_hparams.display,
                 self.threat_hparams.display,
+                self.perturbation_hparams.display,
             ]
         )
 
-    def save_param(self, train_replicate):
+    def save_param(self, threat_replicate: int = 1):
 
-        logger_paths = self.run_path(train_replicate)
+        logger_paths = self.run_path(threat_replicate)
         full_run_path = logger_paths["threat_run_path"]
         if not get_platform().is_primary_process:
             return

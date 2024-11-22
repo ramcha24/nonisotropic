@@ -203,6 +203,8 @@ class DatasetHparams(Hparams):
     random_labels_fraction: float = None
     unsupervised_labels: str = None
     blur_factor: int = None
+    perturbation_style: str = None
+    severity: int = None
 
     _name: str = "Dataset Hyperparameters"
     _description: str = "Hyperparameters that select the dataset, data augmentation, and other data transformations."
@@ -229,21 +231,53 @@ class DatasetHparams(Hparams):
     _blur_factor: str = (
         "Blur the training set by downsampling and then upsampling by this multiple."
     )
+    _perturbation_style: str = (
+        "The type of perturbation applied to the original dataset"
+    )
+    _severity: str = "The severity of the perturbation applied to the original dataset"
 
 
 @dataclass
 class ThreatHparams(Hparams):
-    per_label: int = 50  # list = field(default_factory=lambda: [10, 20, 30, 40, 50])
+    threat_replicate: int = 1
+    per_label: int = 50  #
+    # per_label_array: list = field(default_factory=lambda: [10, 20, 30, 40, 50])
     subset_selection: str = "greedy"
     subset_selection_seed: int = 41
     domain_expansion_factor: int = 10
+    full_precision: bool = False
+    num_chunks: int = 1
+    exact_project: bool = False
 
     _name: str = "Threat Specification Hyperparameters"
     _description: str = "Hyperparameters that specify the threat specification."
-    _per_label_array: str = "Array of per label values"
-    _subset_selection: str = "Algorithm to choose anchor points (defualt : greedy)"
+    _threat_replicate: str = "Replicate the threat specification"
+    _per_label: str = "Number of anchor points per class label"
+    # _per_label_array: str = "Array of number of anchor points per class label"
+    _subset_selection: str = "Algorithm to choose anchor points (default : greedy)"
     _subset_selection_seed: str = "Set a random seed for subset selection"
     _domain_expansion_factor: str = "Factor to expand the domain must be less than train_size/(2*num_labels*per_label). default : 10"
+    _full_precision: str = "Compute anisotropic threats on full precision input and anchor points (Default is computation on float 16)"
+    _num_chunks: str = "Number of chunks to split the threat specification into for multiple-round storage saving"
+    _exact_project: str = (
+        "Compute anisotropic threats with exact projection (default is lazy projection)"
+    )
+
+
+@dataclass
+class PerturbationHparams(Hparams):
+    per_label: int = 50  # list = field(default_factory=lambda: [10, 20, 30, 40, 50])
+    v2_transformations: bool = False
+    common_2d: bool = False
+    common_2d_bar: bool = False
+    common_3d: bool = False
+    backgrounds: bool = False
+    shuffle_seed: int = 14
+
+    _name: str = "Safe Perturbation Hyperparameters"
+    _description: str = (
+        "Hyperparameters that specify safe perturbations that preserve original label."
+    )
 
 
 @dataclass
@@ -252,7 +286,7 @@ class AugmentationHparams(Hparams):
     gaussian_aug_mean: float = 0.0
     gaussian_aug_std: float = 1.0
     greedy_per_label: int = 50
-    N_threshold: float = 0.3
+    N_threshold: float = 0.1
     N_aug: bool = False
     mixup: bool = False
 
@@ -298,7 +332,7 @@ class ModelHparams(Hparams):
 class TrainingHparams(Hparams):
     optimizer_name: str = "sgd"
     lr: float = "0.1"
-    training_steps: str = "40ep"
+    training_steps: str = "160ep"
     data_order_seed: int = None
     momentum: float = 0.0
     nesterov_momentum: float = 0.0
@@ -306,15 +340,22 @@ class TrainingHparams(Hparams):
     gamma: float = None
     warmup_steps: str = None
     weight_decay: float = None
+    grad_clipping_val: float = 1.0
+    grad_accumulation_steps: int = 8
+    ema: bool = False
+    ema_decay: float = 0.999
+    use_amp: bool = False
+    float_16: bool = False
     adv_train: bool = False
     adv_train_attack_type: str = "PGD"
     adv_train_attack_norm: str = "Linf"
-    adv_train_attack_power_Linf: float = 8 / 255  # 1.5
+    adv_train_attack_power_Linf: float = 32 / 255  # 1.5
     adv_train_attack_power_L2: float = 1.5
     adv_train_attack_iter: int = 8
     adv_train_start_epoch: int = 30
-    N_threshold: float = 0.3
     N_adv_train: bool = False
+    N_threshold: float = 0.05
+    N_multi_channel: bool = False
 
     _name: str = "Training Hyperparameters"
     _description: str = "Hyperparameters that determine how the model is trained."
@@ -335,6 +376,10 @@ class TrainingHparams(Hparams):
     _data_order_seed: str = "The random seed for the data order. If not set, the data order is random and unrepeatable."
     _warmup_steps: str = "Steps of linear lr warmup at the start of training as epochs ('20ep') or iterations ('800it')"
     _weight_decay: str = "The L2 penalty to apply to the weights."
+    _grad_clipping_val: str = "The value at which to clip the gradient."
+    _grad_accumulation_steps: str = "Number of steps to accumulate gradients over"
+    _use_amp: str = "Use automatic mixed precision"
+    _float_16: str = "Train model on float 16 precision input data"
     _adv_train: str = "Employ adversarial training"
     _adv_train_attack_type: str = "Type of adversarial attack to employ for training"
     _adv_train_attack_norm: str = "Norm of the adversarial attack - either Linf or L2"
@@ -346,8 +391,9 @@ class TrainingHparams(Hparams):
     )
     _adv_train_attack_iter: str = "Number of iterations of an iterative adversarial attack (ignored otherwise) almost always 20"
     _adv_train_start_epoch: str = "Epoch to start adversarial training"
-    _N_threshold: str = "Threshold for non-isotropic adversarial training"
     _N_adv_train: str = "Employ non-isotropic adversarial training"
+    _N_threshold: str = "Threshold for non-isotropic adversarial training"
+    _N_multi_channel: str = "Compute anisotropic threats on multi channel inputs and anchor points (Default is computation on single channel grayscale images)"
 
 
 @dataclass

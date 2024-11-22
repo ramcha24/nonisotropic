@@ -116,7 +116,6 @@ class ImageDataset(Dataset):
         self._tensor_transforms = tensor_transforms or []
         self._joint_image_transforms = joint_image_transforms or []
         self._joint_tensor_transforms = joint_tensor_transforms or []
-
         self._composed = None
 
     def __getitem__(self, index):
@@ -216,7 +215,7 @@ class DataLoader(DLoader):
 
     def __init__(
         self,
-        dataset: Dataset,
+        dataset: torch.utils.data.Dataset,  # Dataset,
         batch_size: int,
         num_workers: int,
         pin_memory: bool = True,
@@ -246,3 +245,45 @@ class DataLoader(DLoader):
     @property
     def iterations_per_epoch(self):
         return self._iterations_per_epoch
+
+
+class TwinDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset_1: Dataset, dataset_2: Dataset):
+
+        # super(torch.utils.data.Dataset, self).__init__()
+        self.dataset_1 = dataset_1
+        self.dataset_2 = dataset_2
+
+        assert len(dataset_1) == len(dataset_2), "Datasets must have the same length."
+
+        assert (
+            dataset_1.num_labels() == dataset_2.num_labels()
+        ), "Datasets must have the same number of labels."
+
+    def __len__(self):
+        return len(self.dataset_1)
+
+    def __getitem__(self, index_1):
+        example_1, label_1 = self.dataset_1[index_1]
+        index_2 = index_1
+
+        if self.dataset_2.default_dataset_hparams().dataset_name in [
+            "cifar10",
+            "cifar100",
+            "imagenet",
+        ]:
+            # Find an image with a different label for unsafe perturbation
+            while True:
+                index_2 = torch.randint(0, len(self.dataset_2), (1,)).item()
+                label_2 = self.dataset_2._labels[index_2]
+                if label_2 != label1:
+                    break
+        else:
+            label_2 = self.dataset_2._labels[index_2]
+            assert (
+                label_1 == label_2
+            ), f"Labels does not match for safe perturbations at index {index_2}."
+
+        example_2, label_2 = self.dataset_2[index_2]
+
+        return example_1, label_1, example_2, label_2

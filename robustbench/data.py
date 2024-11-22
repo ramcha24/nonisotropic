@@ -12,8 +12,8 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from torch import nn
 
-from robustbench.model_zoo import model_dicts as all_models
-from robustbench.model_zoo.enums import BenchmarkDataset, ThreatModel
+from models.model_zoo import model_dicts as all_models
+from models.model_zoo.enums import BenchmarkDataset, ThreatModel
 from robustbench.zenodo_download import DownloadError, zenodo_download
 from robustbench.loaders import CustomImageFolder
 
@@ -293,6 +293,7 @@ def load_imagenet3dcc(
     n_examples: Optional[int] = 5000,
     severity: int = 5,
     data_dir: str = "./datasets/imagenet3dcc",
+    shuffle_seed: int = 0,
     shuffle: bool = False,
     corruptions: Sequence[str] = CORRUPTIONS_3DCC,
     prepr: Callable = PREPROCESSINGS[None],
@@ -317,7 +318,7 @@ def load_imagenet3dcc(
     test_loader = data.DataLoader(
         imagenet, batch_size=n_examples, shuffle=shuffle, num_workers=2
     )
-
+    test_loader.shuffle(shuffle_seed)
     x_test, y_test, paths = next(iter(test_loader))
 
     return x_test, y_test

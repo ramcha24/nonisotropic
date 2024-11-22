@@ -1,6 +1,7 @@
 import concurrent
 import numpy as np
 import os
+import json
 from PIL import Image
 import torchvision
 
@@ -55,6 +56,16 @@ class Dataset(base.ImageDataset):
             ],
         )
 
+    def get_class_labels():
+        json_file = os.path.join(
+            get_platform().dataset_root, "imagenet", "imagenet_class_index.json"
+        )
+
+        # Load the JSON data
+        with open(json_file) as f:
+            class_info = json.load(f)
+        return class_info
+
     @staticmethod
     def num_train_examples():
         return 1281167
@@ -108,7 +119,7 @@ class Dataset(base.ImageDataset):
     def default_dataset_hparams() -> "hparams.DatasetHparams":
         return hparams.DatasetHparams(
             dataset_name="imagenet",
-            batch_size=75,
+            batch_size=128,  # 1024,  # 28,
             num_labels=1000,
             num_channels=3,
             num_spatial_dims=224,

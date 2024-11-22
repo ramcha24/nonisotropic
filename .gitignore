@@ -166,26 +166,48 @@ cython_debug/
 /datasets/tiny-imagenet-200/
 /datasets/imagenet/
 /datasets/imagenet-hf/
+/datasets/imagenet_3dcc/
+/datasets/imagenet_a/
+/datasets/imagenet_background/
+/datasets/imagenet_c/
+/datasets/imagenet_c_bar/
+/datasets/nights/
+
+/figures/
+
 /datasets/cifar-100-python/
 /datasets/cifar10/cifar-10-batches-py/
 /datasets/cifar10c/
 /datasets/cifar100c/
 
+/corruptions/
 
 /runner_data/
 /rb_master/
+/robustbench/
 /models/cifar10/
 /models/cifar100/
 /models/imagenet/
 /models/tiny-imagenet-200/
 /models/cifar10c/
 /models/cifar100c/
+/utilities/scratch_notebooks/
+
+/threat_specification/cifar10/
+/threat_specification/cifar100/
+/threat_specification/imagenet/
+
+/scripts/models/
 
 #checkpoint files 
 *.pt
 *.pth
 *.tar
 *.gz
+*.pkl
+*.txt
+*.csv
+*.log
 
 # data files 
 *.arrow
@@ -194,4 +216,5 @@ cython_debug/
 *.JPEG
 *.png
 *.jpg
+*.pdf
 /figures/

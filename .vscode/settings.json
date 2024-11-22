@@ -1,8 +1,8 @@
 {
     "editor.inlineSuggest.enabled": true,
     "workbench.startupEditor": "none",
-    "workbench.editor.enablePreview": false,
-    "notebook.lineNumbers": "on",
+    "workbench.editor.enablePreview": true,
+    "notebook.lineNumbers": "off",
     "workbench.colorCustomizations": {},
     "explorer.confirmDragAndDrop": false,
     "editor.defaultFormatter": null,
@@ -11,4 +11,8 @@
     },
     "python.formatting.provider": "black",
     "python.formatting.blackPath": "/cis/home/rmuthuk1/anaconda3/envs/advrob/bin/black",
+    "editor.tokenColorCustomizations": {
+        "comments": "",
+        "textMateRules": []
+    },
 }

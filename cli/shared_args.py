@@ -28,6 +28,8 @@ class JobArgs(hparams.Hparams):
     threat_replicate: int = 1
     train_replicate: int = -1
     test_replicate: int = -1
+    float_16: bool = False
+    in_memory: bool = False
 
     _name: str = "High-level arguments"
     _description: str = (
@@ -56,6 +58,10 @@ class JobArgs(hparams.Hparams):
     _test_replicate: str = (
         "The replicate number for testing. -1 means no replicate number is specified."
     )
+    _float_16: str = (
+        "Use float16 for training or testing (currently only for threat evaluation)"
+    )
+    _in_memory: str = "Compute common corruptions of a dataset in memory (rather than loading from disk)"
     # Why should evaluate_only_at_end , evaluate_only_batch_test and evalaute_every_few_epoch be listed here?
 
 
@@ -142,6 +148,7 @@ def maybe_get_default_hparams(runner_name: str = None):
                 model_hparams,
                 hparams.AugmentationHparams(),
                 training_hparams,
+                hparams.ThreatHparams(),
             )
         if runner_name == "test":
             return TestingDesc(
@@ -257,6 +264,7 @@ def maybe_get_default_hparams(runner_name: str = None):
                     model_hparams,
                     hparams.AugmentationHparams(),
                     training_hparams,
+                    hparams.ThreatHparams(),
                 )
             ]
 
@@ -301,12 +309,17 @@ def maybe_get_default_hparams(runner_name: str = None):
                     model_hparams,
                     hparams.AugmentationHparams(),
                     training_hparams,
+                    hparams.ThreatHparams(),
                 )
                 defaults_list.append(train_desc)
             return defaults_list
     elif runner_name == "compute_threat":
         threat_hparams = hparams.ThreatHparams()
         return ThreatDesc(dataset_hparams, threat_hparams)
+    elif runner_name == "evaluate_threat":
+        threat_hparams = hparams.ThreatHparams()
+        perturbation_hparams = hparams.PerturbationHparams()
+        return ThreatDesc(dataset_hparams, threat_hparams, perturbation_hparams)
     elif runner_name == "download_pretrained":
         return PretrainDesc(dataset_hparams)
     else:
